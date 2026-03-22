@@ -1,0 +1,193 @@
+{
+  "clinical_rationale": {
+    "summary": "High-field 3T MRI demonstrably improves detection of white matter lesions in multiple sclerosis compared to 1.5T, with AJNR gold-standard evidence showing that 3T imaging leads to classification of additional patients meeting McDonald dissemination-in-space criteria on T2-TSE and FLAIR sequences using constant resolution parameters across both field strengths. The central vein sign (CVS), assessed via susceptibility-sensitive sequences (SWI, 3D T2* EPI, SWAN), is an emerging biomarker for MS diagnosis and differentiation from mimickers, though substantial protocol variability currently limits reproducibility and clinical integration. AI-assisted lesion detection achieves pooled sensitivity/specificity of 93%/95% on conventional MRI, reinforcing that optimized acquisition parameters on standardized sequences remain the foundational requirement for reliable MS diagnosis.",
+    "evidence_strength": "Moderate",
+    "key_changes": "2024\u20132026 literature has elevated the central vein sign from a research curiosity to a near-diagnostic criterion anticipated for inclusion in a forthcoming McDonald criteria revision, requiring addition of a dedicated susceptibility-weighted or 3D T2*-EPI sequence to standard MS protocols. There is growing consensus that 3T is the preferred field strength for MS imaging, providing higher SNR that can be traded for thinner slices or shorter acquisition times; at 1.5T, TR and NEX may need to be increased to compensate for lower SNR. Protocol standardization for CVS detection (SWI vs. 3D T2* EPI) remains an open question, but most centers now include at least one susceptibility-sensitive sequence in routine MS brain MRI alongside the established FLAIR, T2-TSE, T1 pre/post gadolinium, and DWI series."
+  },
+  "study_rules": [
+    {
+      "id": "ms_brain_standard",
+      "study_description_substring": "Multiple Sclerosis",
+      "required_series_keywords": [
+        "FLAIR",
+        "T2",
+        "T1",
+        "DWI",
+        "SWI"
+      ]
+    },
+    {
+      "id": "ms_brain_post_contrast",
+      "study_description_substring": "MS Brain",
+      "required_series_keywords": [
+        "T1 POST",
+        "gadolinium",
+        "contrast"
+      ]
+    },
+    {
+      "id": "ms_cvs_susceptibility",
+      "study_description_substring": "MS CVS",
+      "required_series_keywords": [
+        "SWI",
+        "T2* EPI",
+        "SWAN"
+      ]
+    },
+    {
+      "id": "ms_spine",
+      "study_description_substring": "MS Spine",
+      "required_series_keywords": [
+        "T2 SAGITTAL",
+        "T1 SAGITTAL",
+        "STIR",
+        "T1 POST"
+      ]
+    }
+  ],
+  "series_protocols": {
+    "AXIAL T2 TSE": {
+      "te_ms": {
+        "min": 80,
+        "max": 120
+      },
+      "tr_ms": {
+        "min": 3000,
+        "max": 6000
+      },
+      "target_duration_ms": 240000
+    },
+    "AXIAL FLAIR": {
+      "te_ms": {
+        "min": 80,
+        "max": 140
+      },
+      "tr_ms": {
+        "min": 8000,
+        "max": 11000
+      },
+      "target_duration_ms": 360000
+    },
+    "SAGITTAL FLAIR": {
+      "te_ms": {
+        "min": 80,
+        "max": 140
+      },
+      "tr_ms": {
+        "min": 8000,
+        "max": 11000
+      },
+      "target_duration_ms": 360000
+    },
+    "AXIAL T1 SE PRE CONTRAST": {
+      "te_ms": {
+        "min": 8,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 240000
+    },
+    "AXIAL T1 SE POST CONTRAST": {
+      "te_ms": {
+        "min": 8,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 240000
+    },
+    "AXIAL DWI": {
+      "te_ms": {
+        "min": 60,
+        "max": 100
+      },
+      "tr_ms": {
+        "min": 4000,
+        "max": 8000
+      },
+      "target_duration_ms": 120000
+    },
+    "AXIAL SWI": {
+      "te_ms": {
+        "min": 20,
+        "max": 40
+      },
+      "tr_ms": {
+        "min": 28,
+        "max": 50
+      },
+      "target_duration_ms": 300000
+    },
+    "AXIAL 3D T2 STAR EPI CVS": {
+      "te_ms": {
+        "min": 20,
+        "max": 35
+      },
+      "tr_ms": {
+        "min": 1200,
+        "max": 2000
+      },
+      "target_duration_ms": 360000
+    },
+    "SAGITTAL T2 SPINE": {
+      "te_ms": {
+        "min": 80,
+        "max": 120
+      },
+      "tr_ms": {
+        "min": 2500,
+        "max": 5000
+      },
+      "target_duration_ms": 300000
+    },
+    "SAGITTAL T1 SPINE PRE CONTRAST": {
+      "te_ms": {
+        "min": 8,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 240000
+    },
+    "SAGITTAL STIR SPINE": {
+      "te_ms": {
+        "min": 40,
+        "max": 80
+      },
+      "tr_ms": {
+        "min": 3000,
+        "max": 5000
+      },
+      "target_duration_ms": 300000
+    },
+    "SAGITTAL T1 SPINE POST CONTRAST": {
+      "te_ms": {
+        "min": 8,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 240000
+    },
+    "AXIAL T2 SPINE": {
+      "te_ms": {
+        "min": 80,
+        "max": 120
+      },
+      "tr_ms": {
+        "min": 2500,
+        "max": 5000
+      },
+      "target_duration_ms": 180000
+    }
+  }
+}
