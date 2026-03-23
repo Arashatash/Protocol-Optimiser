@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import requests
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 # Set OPENROUTER_API_KEY in the environment (recommended), or fill the fallback for local use only—never commit secrets.
 _OPENROUTER_API_KEY_FALLBACK = ""
@@ -25,7 +26,28 @@ OPENROUTER_API_KEY = (
 ).strip()
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-sonnet-4.6"
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        return exc.response is not None and exc.response.status_code in (429, 500, 502, 503, 504)
+    return isinstance(exc, requests.ConnectionError)
+
+
+@retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=16),
+    reraise=True,
+)
+def _post_openrouter(headers: dict[str, str], payload: dict, timeout: int) -> dict:
+    """POST to OpenRouter with automatic retry on transient failures."""
+    resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()
+
+
+MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6")
 
 ROOT = Path(__file__).resolve().parent
 RULES_PATH = ROOT / "rules.json"
@@ -178,6 +200,9 @@ def generate_protocol_rules(
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ],
+        "temperature": 0.2,
+        "max_tokens": 4096,
+        "response_format": {"type": "json_object"},
     }
 
     headers = {
@@ -187,9 +212,7 @@ def generate_protocol_rules(
         "X-Title": "Protocol Optimiser Rule Generator",
     }
 
-    resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
-    resp.raise_for_status()
-    body = resp.json()
+    body = _post_openrouter(headers, payload, timeout=120)
 
     try:
         content = body["choices"][0]["message"]["content"]

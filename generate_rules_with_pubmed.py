@@ -25,6 +25,7 @@ from generate_rules import (
     OPENROUTER_URL,
     RULES_PATH,
     _extract_json_object,
+    _post_openrouter,
     validate_rules_schema,
     write_rules_file,
 )
@@ -730,6 +731,9 @@ def generate_rules_from_pubmed(
             {"role": "system", "content": RAG_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ],
+        "temperature": 0.2,
+        "max_tokens": 4096,
+        "response_format": {"type": "json_object"},
     }
 
     headers = {
@@ -743,13 +747,11 @@ def generate_rules_from_pubmed(
     print("Calling OpenRouter...")
 
     try:
-        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=180)
-        resp.raise_for_status()
-        body = resp.json()
+        body = _post_openrouter(headers, payload, timeout=180)
     except requests.HTTPError as exc:
         detail = ""
         try:
-            detail = resp.text[:500]
+            detail = exc.response.text[:500] if exc.response is not None else ""
         except Exception:
             pass
         raise RuntimeError(f"OpenRouter HTTP error: {exc}. Body (truncated): {detail}") from exc

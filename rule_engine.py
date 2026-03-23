@@ -5,19 +5,20 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import requests
 from dotenv import load_dotenv
 
-from generate_rules import _extract_json_object
+from generate_rules import _extract_json_object, _post_openrouter
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_API_KEY = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
-SEMANTIC_MODEL = os.environ.get("OPENROUTER_SEMANTIC_MODEL", "google/gemini-2.5-flash")
+SEMANTIC_MODEL = os.environ.get("OPENROUTER_SEMANTIC_MODEL", "anthropic/claude-sonnet-4.6")
 
 
 def _is_one_point_five_t(field_strength_t: float | None) -> bool:
@@ -60,17 +61,22 @@ def _check_timing(
 def map_series_semantic(series_description: str, candidate_keys: list[str]) -> str | None:
     """
     Ask OpenRouter which protocol label is the closest clinical match to the scanner string.
-    Returns one of candidate_keys or None.
+    Returns one of candidate_keys or None. Results are cached in-memory.
     """
     if not OPENROUTER_API_KEY or not candidate_keys:
         return None
     s = (series_description or "").strip()
     if not s:
         return None
+    return _map_series_semantic_cached(s, tuple(candidate_keys))
 
-    labels_json = json.dumps(candidate_keys, ensure_ascii=False)
+
+@lru_cache(maxsize=256)
+def _map_series_semantic_cached(series_desc: str, candidate_keys: tuple[str, ...]) -> str | None:
+    keys_list = list(candidate_keys)
+    labels_json = json.dumps(keys_list, ensure_ascii=False)
     user = (
-        f'Scanner series description: "{s}"\n\n'
+        f'Scanner series description: "{series_desc}"\n\n'
         f"Canonical protocol labels (choose at most one): {labels_json}\n\n"
         'Reply with ONLY a JSON object: {"match": "<exact string from list>"} '
         'or {"match": null} if none fit.'
@@ -88,6 +94,8 @@ def map_series_semantic(series_description: str, candidate_keys: list[str]) -> s
             {"role": "user", "content": user},
         ],
         "temperature": 0.1,
+        "max_tokens": 256,
+        "response_format": {"type": "json_object"},
     }
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -96,9 +104,7 @@ def map_series_semantic(series_description: str, candidate_keys: list[str]) -> s
         "X-Title": "Protocol Optimiser Semantic Map",
     }
     try:
-        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=45)
-        resp.raise_for_status()
-        body = resp.json()
+        body = _post_openrouter(headers, payload, timeout=45)
         content = body["choices"][0]["message"]["content"]
     except (requests.RequestException, KeyError, IndexError, TypeError):
         return None
@@ -116,7 +122,7 @@ def map_series_semantic(series_description: str, candidate_keys: list[str]) -> s
         if key is None:
             return None
         key = str(key).strip()
-        return key if key in candidate_keys else None
+        return key if key in keys_list else None
     except (json.JSONDecodeError, TypeError):
         return None
 
