@@ -14,7 +14,7 @@ import streamlit as st
 
 from dicom_parser import parse_dicom
 from generate_rules import write_rules_file
-from generate_rules_with_pubmed import generate_rules_from_pubmed
+from generate_rules_with_pubmed import generate_rules_from_pubmed, _extract_text_from_pdf_bytes
 from rule_engine import evaluate, load_rules
 
 CONTACT_EMAIL = "arash.atashnama@gmail.com"
@@ -58,6 +58,16 @@ def _build_source_rows(sources: Any) -> list[dict[str, str]]:
     for src in sources:
         if not isinstance(src, dict):
             continue
+        if src.get("source") == "user_document":
+            density = src.get("param_density")
+            rows.append({
+                "Year": "-",
+                "Journal": f"📎 {src.get('journal') or 'User document'}",
+                "Impact Factor ⭐": "-",
+                "Param Density": str(density) if density is not None else "-",
+                "PMID": "-",
+            })
+            continue
         year = src.get("year")
         year_label = str(year) if year is not None else "-"
         density = src.get("param_density")
@@ -93,6 +103,8 @@ def main() -> None:
         st.session_state.last_magnetic_field_strength_t = None
     if "guideline_target_scanner" not in st.session_state:
         st.session_state.guideline_target_scanner = "Not specified"
+    if "last_supplement_used" not in st.session_state:
+        st.session_state.last_supplement_used = False
 
     # --- Sidebar ---
     with st.sidebar:
@@ -123,17 +135,52 @@ def main() -> None:
         if scanner_tesla == 1.5:
             st.info(ONE_POINT_FIVE_T_NOTE)
 
+        st.markdown("---")
+        st.caption("**Optional:** attach a reference document (society guideline, site protocol) to boost evidence strength.")
+        ref_file = st.file_uploader(
+            "Reference document (PDF or TXT)",
+            type=["pdf", "txt"],
+            accept_multiple_files=False,
+            key="ref_doc_uploader",
+        )
+        ref_paste = st.text_area(
+            "Or paste an excerpt",
+            height=100,
+            key="ref_doc_paste",
+            help="If both a file and pasted text are provided, only the uploaded file is used.",
+        )
+        st.caption("Text-only extraction; scanned/image PDFs may yield no text. You must have rights to use this document.")
+
         if st.button("Sync with PubMed", type="primary", use_container_width=True):
             st.session_state.last_sync_error = None
+
+            supplement_text: str | None = None
+            supplement_name: str | None = None
+            if ref_file is not None:
+                supplement_name = ref_file.name
+                raw_bytes = ref_file.getvalue()
+                if ref_file.name.lower().endswith(".pdf"):
+                    supplement_text = _extract_text_from_pdf_bytes(raw_bytes)
+                    if not supplement_text:
+                        st.warning("No text could be extracted from the PDF (it may be scanned/image-only). Proceeding without it.")
+                else:
+                    supplement_text = raw_bytes.decode("utf-8", errors="replace")
+            elif ref_paste and ref_paste.strip():
+                supplement_text = ref_paste.strip()
+                supplement_name = "pasted_excerpt"
+
             try:
                 with st.spinner("Searching PubMed and updating rules..."):
                     data, sources = generate_rules_from_pubmed(
                         protocol_query.strip(),
                         scanner_tesla=scanner_tesla,
+                        supplementary_text=supplement_text,
+                        supplementary_filename=supplement_name,
                     )
                     write_rules_file(data)
                     st.session_state.last_sync_sources = sources
-                    st.session_state.last_pmids = [s["pmid"] for s in sources]
+                    st.session_state.last_pmids = [s.get("pmid") for s in sources if s.get("pmid")]
+                    st.session_state.last_supplement_used = bool(supplement_text and supplement_text.strip())
                     st.session_state.rules_version = st.session_state.rules_version + 1
             except Exception as exc:
                 st.session_state.last_sync_error = str(exc)
@@ -142,10 +189,17 @@ def main() -> None:
             st.error(st.session_state.last_sync_error)
         elif st.session_state.last_pmids is not None and st.session_state.last_sync_error is None:
             st.success("Guidelines synced. `rules.json` updated.")
+            if st.session_state.get("last_supplement_used"):
+                st.info("Reference document included in synthesis.", icon="📎")
             st.caption("Synced sources (top 5 after journal ranking)")
             sources = st.session_state.last_sync_sources
             if sources and isinstance(sources[0], dict):
                 for src in sources:
+                    if src.get("source") == "user_document":
+                        fname = src.get("journal") or "User document"
+                        density = src.get("param_density", 0)
+                        st.markdown(f"- 📎 **{fname}** (param density: {density})")
+                        continue
                     star = "⭐ " if src.get("high_impact") else ""
                     j = src.get("journal") or "Unknown"
                     pid = src.get("pmid", "")
@@ -200,8 +254,16 @@ def main() -> None:
                 explanation = _EVIDENCE_EXPLANATIONS.get(evidence_strength.lower(), "")
                 if explanation:
                     st.caption(explanation)
+                if evidence_strength.lower() == "low":
+                    st.info(
+                        "**Tip:** To improve evidence strength, try a more specific query "
+                        "(e.g. 'acute ischemic stroke brain MRI ACR'), attach a **reference PDF** "
+                        "or **paste an excerpt** from society guidelines in the sidebar, "
+                        "and verify output against your local departmental protocol.",
+                        icon="💡",
+                    )
 
-            st.markdown("#### 2024-2026 changes versus older protocols")
+            st.markdown("#### Recent changes versus older protocols")
             st.write(key_changes or "No literature delta summary is available in the current rules snapshot.")
         else:
             st.info("No AI rationale has been synced yet.")
@@ -221,7 +283,7 @@ def main() -> None:
     with st.expander("How to use", expanded=False):
         st.markdown(
             """
-1. **Sync guidelines** — Use the sidebar to **Sync with PubMed** for your study type (e.g. MS, Stroke).  
+1. **Sync guidelines** — Use the sidebar to **Sync with PubMed** for your study type (e.g. MS, Stroke). Optionally attach a **reference PDF or paste an excerpt** (society guideline, site protocol) to boost evidence quality.
 2. **Upload** — Drag and drop your `.dcm` file into the uploader below.  
 3. **Review results** — Check the **Clinical audit** strip for physics accuracy (TE/TR) and the **Efficiency score** for revenue-oriented optimization signals.
             """

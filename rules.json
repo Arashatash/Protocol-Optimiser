@@ -1,154 +1,95 @@
 {
   "clinical_rationale": {
-    "summary": "The provided abstracts address advanced and quantitative MRI techniques for Multiple Sclerosis (MS) brain imaging, including ultrashort echo time myelin imaging (STAIR-UTE at 3T), quantitative T1 mapping for microstructural assessment, sodium MRI at 7T, and ultrahigh-field 7T neuroimaging broadly. None of the five abstracts provide parameter-dense (TE/TR explicit) data for a standard clinical MS brain protocol. The gold-standard journal evidence (Radiology, AJNR, RadioGraphics, European Radiology, Investigative Radiology) is focused on advanced/quantitative sequences rather than conventional clinical MS protocol parameters. Standard clinical MS brain MRI protocol parameters (FLAIR, T2, T1 pre/post, DWI, PDWI) are therefore synthesized primarily from established clinical knowledge and consensus guidelines (MAGNIMS, North American Imaging in MS), with the literature corroborating the importance of FLAIR for lesion detection and T1 mapping for microstructural characterization.",
-    "evidence_strength": "Low",
-    "key_changes": "Recent literature demonstrates a clear shift toward quantitative and advanced sequences in MS research imaging: STAIR-UTE enables direct myelin proton density imaging beyond conventional FLAIR; quantitative T1 mapping (variable flip angle) is increasingly validated as a biomarker of disability-relevant microstructural damage in normal-appearing white matter and grey matter in early RRMS; and sodium MRI at 7T reveals sodium concentration changes in MS subtypes sensitive to myelin loss. At 7T, superior lesion detection and cortical lesion conspicuity are well-documented. For routine clinical MS brain MRI, the MAGNIMS-CMSC consensus remains the backbone: 3D FLAIR is the primary lesion-detection sequence, supplemented by 3D T1-weighted (pre and post-gadolinium), DWI, and optionally PD/T2. No new consensus has displaced these standard sequences for routine 1.5T/3T clinical use, but the literature increasingly supports adding quantitative T1 mapping and potentially advanced myelin-sensitive sequences as the field matures toward clinical translation."
+    "summary": "The MS Brain MRI protocol prioritizes lesion detection and characterization across white matter, cortical, and normal-appearing brain parenchyma. The departmental 2025 reference document provides high parameter density (12 technical terms) with explicit TE/TR values for all five sequences, making it the primary benchmark for site-specific parameters. PubMed evidence from gold-standard journals (Radiology, AJNR, RadioGraphics, European Radiology, Investigative Radiology) supports advanced imaging approaches including 3D FLAIR for lesion detection, T1-based microstructural mapping, SWI for venocentric lesion characterization, and DWI for acute demyelination, but the abstracts are largely parameter-sparse (density 0\u20131), so the reference document governs specific TE/TR values. Emerging research highlights the promise of UTE myelin imaging and 7T acquisitions, but these remain investigational and are not incorporated into the routine clinical protocol.",
+    "evidence_strength": "High",
+    "key_changes": "Recent literature (2020\u20132025) increasingly emphasizes 3D isotropic FLAIR as the cornerstone sequence for MS lesion detection, replacing older 2D FLAIR due to superior sensitivity for juxtacortical and infratentorial lesions as endorsed by MAGNIMS/CMSC consensus. Quantitative T1 mapping and sodium MRI (7T) are emerging as sensitive microstructural biomarkers for disability tracking in RRMS, though not yet standard of care. UTE sequences for direct myelin imaging (Radiology 2020, PMID 32779970) represent a promising research frontier. SWI has become increasingly incorporated into clinical MS protocols for identifying the central vein sign and paramagnetic rim lesions, which are now recognized diagnostic and prognostic markers. The 2025 departmental protocol reflects these trends by including 3D FLAIR, 3D MPRAGE, SWI, and DWI as core sequences."
   },
   "study_rules": [
     {
       "id": "ms_brain_standard",
-      "study_description_substring": "Multiple Sclerosis Brain",
-      "required_series_keywords": [
-        "FLAIR",
-        "T2",
-        "T1",
-        "DWI",
-        "POST GAD"
-      ]
-    },
-    {
-      "id": "ms_brain_alt_1",
       "study_description_substring": "MS Brain",
       "required_series_keywords": [
         "FLAIR",
         "T2",
-        "T1",
         "DWI",
-        "POST GAD"
+        "MPRAGE",
+        "SWI"
       ]
     },
     {
-      "id": "ms_brain_alt_2",
-      "study_description_substring": "Demyelinating Disease Brain",
+      "id": "ms_brain_multiple_sclerosis",
+      "study_description_substring": "Multiple Sclerosis Brain",
       "required_series_keywords": [
         "FLAIR",
         "T2",
-        "T1",
         "DWI",
-        "POST GAD"
+        "T1",
+        "SWI"
+      ]
+    },
+    {
+      "id": "ms_brain_demyelinating",
+      "study_description_substring": "Demyelinating",
+      "required_series_keywords": [
+        "FLAIR",
+        "T2",
+        "DWI",
+        "MPRAGE"
       ]
     }
   ],
   "series_protocols": {
     "SAG 3D FLAIR": {
       "te_ms": {
-        "min": 80,
-        "max": 140
+        "min": 380,
+        "max": 392
       },
       "tr_ms": {
-        "min": 6000,
-        "max": 11000
+        "min": 4700,
+        "max": 4900
       },
-      "target_duration_ms": 480000
+      "target_duration_ms": 312000
     },
     "AX T2 FSE": {
       "te_ms": {
-        "min": 80,
-        "max": 120
+        "min": 95,
+        "max": 105
       },
       "tr_ms": {
-        "min": 3000,
-        "max": 6000
+        "min": 5300,
+        "max": 5700
       },
-      "target_duration_ms": 180000
-    },
-    "AX PD/T2 DUAL ECHO": {
-      "te_ms": {
-        "min": 10,
-        "max": 120
-      },
-      "tr_ms": {
-        "min": 2500,
-        "max": 5000
-      },
-      "target_duration_ms": 240000
+      "target_duration_ms": 210000
     },
     "AX DWI": {
       "te_ms": {
-        "min": 60,
-        "max": 100
+        "min": 63,
+        "max": 73
       },
       "tr_ms": {
-        "min": 4000,
-        "max": 8000
-      },
-      "target_duration_ms": 120000
+        "min": 3800,
+        "max": 4200
+      }
     },
-    "SAG 3D T1 MPRAGE PRE": {
+    "SAG 3D T1 MPRAGE": {
       "te_ms": {
-        "min": 2,
-        "max": 4
+        "min": 3.0,
+        "max": 4.0
       },
       "tr_ms": {
-        "min": 1700,
-        "max": 2300
-      },
-      "target_duration_ms": 360000
+        "min": 2200,
+        "max": 2400
+      }
     },
-    "SAG 3D T1 MPRAGE POST GAD": {
+    "AX SWI": {
       "te_ms": {
-        "min": 2,
-        "max": 4
+        "min": 18,
+        "max": 22
       },
       "tr_ms": {
-        "min": 1700,
-        "max": 2300
-      },
-      "target_duration_ms": 360000
-    },
-    "AX T1 SE PRE": {
-      "te_ms": {
-        "min": 10,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 700
-      },
-      "target_duration_ms": 180000
-    },
-    "AX T1 SE POST GAD": {
-      "te_ms": {
-        "min": 10,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 700
-      },
-      "target_duration_ms": 180000
-    },
-    "AX T2 STAR GRE": {
-      "te_ms": {
-        "min": 15,
-        "max": 30
-      },
-      "tr_ms": {
-        "min": 600,
-        "max": 1200
-      },
-      "target_duration_ms": 180000
-    },
-    "SAG 3D T1 VFA MAP": {
-      "te_ms": {
-        "min": 2,
-        "max": 5
-      },
-      "tr_ms": {
-        "min": 15,
-        "max": 30
-      },
-      "target_duration_ms": 420000
+        "min": 45,
+        "max": 53
+      }
     }
   }
 }
