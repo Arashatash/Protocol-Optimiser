@@ -31,6 +31,15 @@ ROOT = Path(__file__).resolve().parent
 RULES_PATH = ROOT / "rules.json"
 EVIDENCE_STRENGTH_LEVELS = {"high", "moderate", "low"}
 
+ONE_POINT_FIVE_T_NOTE = (
+    "Note: The current scanner is 1.5 Tesla. Please ensure the TE/TR ranges are "
+    "optimized for 1.5T signal-to-noise ratios, even if standard references focus on 3T."
+)
+
+
+def _is_one_point_five_t(scanner_tesla: float | None) -> bool:
+    return isinstance(scanner_tesla, (int, float)) and 1.35 <= float(scanner_tesla) <= 1.65
+
 SYSTEM_PROMPT = """You are a Senior Neuroradiology Consultant and MRI protocol specialist.
 
 The user will describe a clinical MRI protocol (e.g. indication, sequences, site conventions).
@@ -41,7 +50,7 @@ The JSON MUST match this exact structure and key names:
 
 {
   "clinical_rationale": {
-    "summary": "exactly 3 sentences summarizing the consensus from the available evidence and current neuroradiology best practice",
+    "summary": "2-4 sentences summarizing the consensus from the available evidence and current neuroradiology best practice",
     "evidence_strength": "High | Moderate | Low",
     "key_changes": "short paragraph explaining what has changed in 2024-2026 literature versus older standard protocols"
   },
@@ -55,15 +64,20 @@ The JSON MUST match this exact structure and key names:
   "series_protocols": {
     "EXACT SERIES LABEL AS USED ON SCANNER": {
       "te_ms": { "min": <number>, "max": <number> },
-      "tr_ms": { "min": <number>, "max": <number> }
+      "tr_ms": { "min": <number>, "max": <number> },
+      "target_duration_ms": <optional total acquisition time benchmark in ms>
     }
   }
 }
 
 Rules:
 - clinical_rationale: required for newly generated output. Explain the trade-offs between signal-to-noise and scan speed, including how those trade-offs differ in 1.5T versus 3T practice when relevant.
+- evidence_strength grading rubric (you MUST follow this):
+  - "High": you have strong, specific clinical evidence with explicit TE/TR or sequence parameter numbers from established neuroradiology practice.
+  - "Moderate": you have general clinical consensus but limited explicit parameter numbers from recent literature.
+  - "Low": the output relies primarily on your training knowledge with no specific literature backing.
 - study_rules: at least one entry; required_series_keywords lists substrings that should appear in Series Description for critical sequences (e.g. SWI, DWI).
-- series_protocols: keys are typical Series Description strings; te_ms and tr_ms are echo/repetition time ranges in milliseconds (reasonable clinical ranges).
+- series_protocols: keys are typical Series Description strings; te_ms and tr_ms are echo/repetition time ranges in milliseconds (reasonable clinical ranges). Include target_duration_ms when you can estimate a typical total acquisition time benchmark.
 - Use numbers only for min/max (integers or decimals as appropriate).
 - Output valid JSON only."""
 
@@ -142,7 +156,10 @@ def validate_rules_schema(data: Any) -> None:
                 raise ValueError(f"series {name!r}: target_duration_ms must be positive.")
 
 
-def generate_protocol_rules(prompt: str) -> dict[str, Any]:
+def generate_protocol_rules(
+    prompt: str,
+    scanner_tesla: float | None = None,
+) -> dict[str, Any]:
     """Call OpenRouter chat completions; return parsed rules dict."""
     if not OPENROUTER_API_KEY:
         raise RuntimeError(
@@ -151,11 +168,15 @@ def generate_protocol_rules(prompt: str) -> dict[str, Any]:
             "  cmd: set OPENROUTER_API_KEY=your-key-here"
         )
 
+    user_content = prompt.strip()
+    if _is_one_point_five_t(scanner_tesla):
+        user_content = f"{ONE_POINT_FIVE_T_NOTE}\n\n{user_content}"
+
     payload = {
         "model": MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt.strip()},
+            {"role": "user", "content": user_content},
         ],
     }
 
@@ -193,14 +214,22 @@ def main() -> int:
         "prompt",
         help='Protocol description, e.g. "Standard Multiple Sclerosis Brain MRI protocols"',
     )
+    parser.add_argument(
+        "--scanner-tesla",
+        type=float,
+        default=None,
+        help="Scanner field strength in Tesla (e.g. 1.5 or 3.0) for hardware-aware generation.",
+    )
     args = parser.parse_args()
 
     print(f"Model: {MODEL}")
+    if args.scanner_tesla is not None:
+        print(f"Scanner: {args.scanner_tesla}T")
     print(f"Writing to: {RULES_PATH}")
     print("Calling OpenRouter...")
 
     try:
-        data = generate_protocol_rules(args.prompt)
+        data = generate_protocol_rules(args.prompt, scanner_tesla=args.scanner_tesla)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

@@ -1,52 +1,79 @@
 {
   "clinical_rationale": {
-    "summary": "High-field 3T MRI demonstrably improves detection of white matter lesions in multiple sclerosis compared to 1.5T, with AJNR gold-standard evidence showing that 3T imaging leads to classification of additional patients meeting McDonald dissemination-in-space criteria on T2-TSE and FLAIR sequences using constant resolution parameters across both field strengths. The central vein sign (CVS), assessed via susceptibility-sensitive sequences (SWI, 3D T2* EPI, SWAN), is an emerging biomarker for MS diagnosis and differentiation from mimickers, though substantial protocol variability currently limits reproducibility and clinical integration. AI-assisted lesion detection achieves pooled sensitivity/specificity of 93%/95% on conventional MRI, reinforcing that optimized acquisition parameters on standardized sequences remain the foundational requirement for reliable MS diagnosis.",
-    "evidence_strength": "Moderate",
-    "key_changes": "2024\u20132026 literature has elevated the central vein sign from a research curiosity to a near-diagnostic criterion anticipated for inclusion in a forthcoming McDonald criteria revision, requiring addition of a dedicated susceptibility-weighted or 3D T2*-EPI sequence to standard MS protocols. There is growing consensus that 3T is the preferred field strength for MS imaging, providing higher SNR that can be traded for thinner slices or shorter acquisition times; at 1.5T, TR and NEX may need to be increased to compensate for lower SNR. Protocol standardization for CVS detection (SWI vs. 3D T2* EPI) remains an open question, but most centers now include at least one susceptibility-sensitive sequence in routine MS brain MRI alongside the established FLAIR, T2-TSE, T1 pre/post gadolinium, and DWI series."
+    "summary": "MRI is the cornerstone imaging modality for multiple sclerosis (MS) brain assessment, with the 2024 McDonald criteria now incorporating advanced biomarkers such as the central vein sign and paramagnetic rim lesions, achieving 94% diagnostic accuracy at 3T (PMID 41762178). The standard protocol anchored by 3D FLAIR (sagittal), axial T2/T2-FLAIR, DWI/ADC, and SWI has been harmonized across major white matter disease networks, with a consensus average acquisition time of approximately 40 minutes (PMID 41371978). Emerging evidence from Radiology (PMID 41251554) supports C-FLAIR techniques at 3T to eliminate B0/RF inhomogeneity artifacts without sacrificing SNR or CNR, while gadolinium-enhanced T1 sequences remain critical for distinguishing active inflammatory lesions from chronic plaques. At 1.5T, longer TR and NEX averaging are required to maintain adequate SNR, necessarily extending scan times; at 3T, the doubled baseline SNR permits thinner slices and shorter acquisitions, enabling the high-resolution 3D sequences now mandated by the 2024 criteria.",
+    "evidence_strength": "High",
+    "key_changes": "The 2024 McDonald criteria revision (reflected in PMID 41762178, ACR Appropriateness Criteria update) formally integrates central vein sign and paramagnetic rim lesions as imaging diagnostic features, elevating the role of 3T SWI/phase-sensitive sequences from optional to protocol-essential. The Radiology paper (PMID 41251554) introduces C-FLAIR as a practical replacement for conventional FLAIR at 3T in regions prone to B0/RF inhomogeneity, with equivalent SNR/CNR and superior artifact suppression, at a modest 13.8% SAR increase \u2014 a clinically acceptable trade-off. The WM Rounds Network Delphi consensus (PMID 41371978, AJNR) formalizes 3D MPRAGE and 3D FLAIR in the sagittal plane as the preferred orientation for volumetric lesion tracking, superseding older axial-only 2D FLAIR-centric protocols. Gadolinium contrast remains selective rather than universal, reserved for clinical or radiological evidence of active disease."
   },
   "study_rules": [
     {
       "id": "ms_brain_standard",
-      "study_description_substring": "Multiple Sclerosis",
+      "study_description_substring": "MS Brain",
       "required_series_keywords": [
         "FLAIR",
         "T2",
-        "T1",
         "DWI",
-        "SWI"
-      ]
-    },
-    {
-      "id": "ms_brain_post_contrast",
-      "study_description_substring": "MS Brain",
-      "required_series_keywords": [
-        "T1 POST",
-        "gadolinium",
-        "contrast"
-      ]
-    },
-    {
-      "id": "ms_cvs_susceptibility",
-      "study_description_substring": "MS CVS",
-      "required_series_keywords": [
         "SWI",
-        "T2* EPI",
-        "SWAN"
+        "T1"
       ]
     },
     {
-      "id": "ms_spine",
-      "study_description_substring": "MS Spine",
+      "id": "ms_brain_demyelinating",
+      "study_description_substring": "Demyelinating Brain",
       "required_series_keywords": [
-        "T2 SAGITTAL",
-        "T1 SAGITTAL",
-        "STIR",
-        "T1 POST"
+        "FLAIR",
+        "T2",
+        "DWI",
+        "SWI",
+        "T1",
+        "Post-contrast"
+      ]
+    },
+    {
+      "id": "ms_brain_mcdonald",
+      "study_description_substring": "McDonald Criteria",
+      "required_series_keywords": [
+        "3D FLAIR",
+        "MPRAGE",
+        "SWI",
+        "DWI",
+        "T2"
+      ]
+    },
+    {
+      "id": "ms_brain_followup",
+      "study_description_substring": "MS Follow-up Brain",
+      "required_series_keywords": [
+        "3D FLAIR",
+        "T1 Post",
+        "SWI",
+        "DWI"
       ]
     }
   ],
   "series_protocols": {
-    "AXIAL T2 TSE": {
+    "3D T1 MPRAGE SAG": {
+      "te_ms": {
+        "min": 2.0,
+        "max": 4.0
+      },
+      "tr_ms": {
+        "min": 1800,
+        "max": 2300
+      },
+      "target_duration_ms": 420000
+    },
+    "3D FLAIR SAG": {
+      "te_ms": {
+        "min": 80,
+        "max": 140
+      },
+      "tr_ms": {
+        "min": 6000,
+        "max": 11000
+      },
+      "target_duration_ms": 480000
+    },
+    "AX T2 TSE": {
       "te_ms": {
         "min": 80,
         "max": 120
@@ -57,51 +84,18 @@
       },
       "target_duration_ms": 240000
     },
-    "AXIAL FLAIR": {
+    "AX T2 FLAIR": {
       "te_ms": {
         "min": 80,
         "max": 140
       },
       "tr_ms": {
-        "min": 8000,
+        "min": 7000,
         "max": 11000
       },
-      "target_duration_ms": 360000
+      "target_duration_ms": 300000
     },
-    "SAGITTAL FLAIR": {
-      "te_ms": {
-        "min": 80,
-        "max": 140
-      },
-      "tr_ms": {
-        "min": 8000,
-        "max": 11000
-      },
-      "target_duration_ms": 360000
-    },
-    "AXIAL T1 SE PRE CONTRAST": {
-      "te_ms": {
-        "min": 8,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 700
-      },
-      "target_duration_ms": 240000
-    },
-    "AXIAL T1 SE POST CONTRAST": {
-      "te_ms": {
-        "min": 8,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 700
-      },
-      "target_duration_ms": 240000
-    },
-    "AXIAL DWI": {
+    "AX DWI": {
       "te_ms": {
         "min": 60,
         "max": 100
@@ -112,82 +106,49 @@
       },
       "target_duration_ms": 120000
     },
-    "AXIAL SWI": {
+    "AX ADC MAP": {
       "te_ms": {
-        "min": 20,
+        "min": 60,
+        "max": 100
+      },
+      "tr_ms": {
+        "min": 4000,
+        "max": 8000
+      },
+      "target_duration_ms": 60000
+    },
+    "AX SWI": {
+      "te_ms": {
+        "min": 15,
         "max": 40
       },
       "tr_ms": {
-        "min": 28,
-        "max": 50
+        "min": 25,
+        "max": 60
       },
       "target_duration_ms": 300000
     },
-    "AXIAL 3D T2 STAR EPI CVS": {
+    "AX T1 POST CONTRAST": {
       "te_ms": {
-        "min": 20,
-        "max": 35
-      },
-      "tr_ms": {
-        "min": 1200,
-        "max": 2000
-      },
-      "target_duration_ms": 360000
-    },
-    "SAGITTAL T2 SPINE": {
-      "te_ms": {
-        "min": 80,
-        "max": 120
-      },
-      "tr_ms": {
-        "min": 2500,
-        "max": 5000
-      },
-      "target_duration_ms": 300000
-    },
-    "SAGITTAL T1 SPINE PRE CONTRAST": {
-      "te_ms": {
-        "min": 8,
-        "max": 20
+        "min": 2.0,
+        "max": 15
       },
       "tr_ms": {
         "min": 400,
         "max": 700
       },
-      "target_duration_ms": 240000
-    },
-    "SAGITTAL STIR SPINE": {
-      "te_ms": {
-        "min": 40,
-        "max": 80
-      },
-      "tr_ms": {
-        "min": 3000,
-        "max": 5000
-      },
       "target_duration_ms": 300000
     },
-    "SAGITTAL T1 SPINE POST CONTRAST": {
+    "3D T1 MPRAGE POST CONTRAST SAG": {
       "te_ms": {
-        "min": 8,
-        "max": 20
+        "min": 2.0,
+        "max": 4.0
       },
       "tr_ms": {
-        "min": 400,
-        "max": 700
+        "min": 1800,
+        "max": 2300
       },
-      "target_duration_ms": 240000
-    },
-    "AXIAL T2 SPINE": {
-      "te_ms": {
-        "min": 80,
-        "max": 120
-      },
-      "tr_ms": {
-        "min": 2500,
-        "max": 5000
-      },
-      "target_duration_ms": 180000
+      "target_duration_ms": 420000
     }
   }
 }

@@ -343,7 +343,7 @@ def evaluate(parsed_data: dict[str, Any], rules: dict[str, Any]) -> dict[str, An
         parts: list[str] = []
         if te_spec and "min" in te_spec and "max" in te_spec:
             parts.append(f"TE {_format_range(te_spec)}")
-        if tr_spec and "min" in te_spec and "max" in te_spec:
+        if tr_spec and "min" in tr_spec and "max" in tr_spec:
             parts.append(f"TR {_format_range(tr_spec)}")
         ranges = "; ".join(parts) if parts else "n/a"
         messages.append(

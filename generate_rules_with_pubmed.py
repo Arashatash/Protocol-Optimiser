@@ -66,7 +66,7 @@ ONE_POINT_FIVE_T_NOTE = (
     "optimized for 1.5T signal-to-noise ratios, even if the PubMed abstracts focus on 3T."
 )
 
-RAG_SYSTEM_PROMPT = """You are an expert MRI Radiologist. I will provide you with exactly five PubMed abstracts. Each block is labeled with its PMID, source journal, and whether it is a high-impact gold-standard source.
+RAG_SYSTEM_PROMPT = """You are an expert MRI Radiologist. I will provide you with up to five PubMed abstracts. Each block is labeled with its PMID, source journal, and whether it is a high-impact gold-standard source.
 
 Weighting rules (critical):
 - Papers from Radiology, Journal of Magnetic Resonance Imaging (JMRI), and AJNR are high-impact gold standards; give their reported sequence parameters and timing the HIGHEST weight when synthesizing rules.
@@ -81,7 +81,7 @@ The JSON MUST use this exact structure and key names:
 
 {
   "clinical_rationale": {
-    "summary": "exactly 3 sentences summarizing the consensus from the PubMed evidence",
+    "summary": "2-4 sentences summarizing the consensus from the PubMed evidence",
     "evidence_strength": "High | Moderate | Low",
     "key_changes": "short paragraph explaining what has changed in 2024-2026 literature versus older standard protocols"
   },
@@ -101,7 +101,12 @@ The JSON MUST use this exact structure and key names:
   }
 }
 
-clinical_rationale must be present and should read like a concise executive brief. study_rules must be a non-empty array. series_protocols must be a non-empty object. Use numeric min/max in milliseconds for te_ms and tr_ms. Include target_duration_ms when literature suggests a typical total scan duration benchmark. Output valid JSON only."""
+clinical_rationale must be present and should read like a concise executive brief.
+evidence_strength grading rubric (you MUST follow this):
+- "High": at least 2 of the provided abstracts are from gold-standard journals AND contain explicit TE/TR or sequence parameter numbers.
+- "Moderate": gold-standard journal abstracts are present but lack specific parameter numbers, OR only non-gold journals provide explicit numbers.
+- "Low": no abstracts contain explicit MRI parameter numbers and the output relies primarily on your training knowledge.
+study_rules must be a non-empty array. series_protocols must be a non-empty object. Use numeric min/max in milliseconds for te_ms and tr_ms. Include target_duration_ms when literature suggests a typical total scan duration benchmark. Output valid JSON only."""
 
 
 def journal_is_gold(journal: str) -> bool:
@@ -285,8 +290,12 @@ def select_top_five_pmids(
             }
         )
 
-    # Gold journals first; within each tier, most recent first (higher sort_ts first).
-    rows.sort(key=lambda r: (0 if r["high_impact"] else 1, -r["sort_ts"]))
+    _RECENCY_FLOOR = 2018
+    rows.sort(key=lambda r: (
+        0 if r["high_impact"] else 1,
+        0 if isinstance(r.get("year"), int) and r["year"] >= _RECENCY_FLOOR else 1,
+        -r["sort_ts"],
+    ))
     return rows[:5]
 
 
@@ -385,9 +394,8 @@ def _build_user_rag_content(
     return (
         f"Requested protocol: {protocol_name}\n\n"
         f"{scanner_note}"
-        f"I am providing you with {len(ranked_rows)} abstracts. Each is labeled with its source journal. "
-        f"Papers from Radiology, JMRI, and AJNR are high-impact gold standards; give their parameters the "
-        f"highest weight. If a lower-tier journal contradicts a gold-standard journal, follow the gold-standard.\n\n"
+        f"I am providing you with {len(ranked_rows)} abstracts. "
+        f"Apply the journal weighting rules from your instructions.\n\n"
         + "\n\n---\n\n".join(blocks)
     )
 
@@ -406,7 +414,11 @@ def generate_rules_from_pubmed(
             "OPENROUTER_API_KEY is not set. Set it in your environment before running this script."
         )
 
-    query = f"{protocol_name} MRI guidelines parameters"
+    query = (
+        f"({protocol_name}) AND (MRI OR magnetic resonance) "
+        f'AND ("sequence parameters" OR "repetition time" OR "echo time" OR "protocol" OR "guidelines") '
+        f"AND 2018:2026[dp]"
+    )
     print(f"PubMed query: {query!r}")
 
     try:
@@ -433,15 +445,19 @@ def generate_rules_from_pubmed(
     except RuntimeError:
         raise
 
+    ranked = [r for r in ranked if abstract_by_pmid.get(r["pmid"], "").strip()]
+    if not ranked:
+        print("Warning: no AbstractText extracted from efetch; the model will rely on protocol name and labels.")
+    else:
+        print(f"After abstract filter: {len(ranked)} paper(s) with usable abstracts.")
+    top_pmids = [r["pmid"] for r in ranked]
+
     user_content = _build_user_rag_content(
         protocol_name,
         ranked,
         abstract_by_pmid,
         scanner_tesla=scanner_tesla,
     )
-
-    if not any(abstract_by_pmid.get(p, "").strip() for p in top_pmids):
-        print("Warning: no AbstractText extracted from efetch; the model will rely on protocol name and labels.")
 
     payload = {
         "model": OPENROUTER_MODEL,
