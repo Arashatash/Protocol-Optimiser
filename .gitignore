@@ -4,4 +4,3 @@ __pycache__/
 *.pyc
 logs/
 dicom_dropzone/*.dcm
-oem_docs/*.pdf

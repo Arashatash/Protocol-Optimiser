@@ -44,6 +44,17 @@ OEM_DOCUMENT_REGISTRY: list[dict[str, Any]] = [
         "description": "Manual cardiac planning with trueSSFP parameter table: TR, TE, flip angle, matrix, slice thickness.",
     },
     {
+        "id": "canon_cardiac_planning_cardioline",
+        "label": "Canon — Cardiac MR Planning with CardioLine (standard views)",
+        "filename": "637392863671057007LM.pdf",
+        "manufacturer": "Canon",
+        "category": "workflow",
+        "body_region": "cardiac",
+        "field_strengths": ["1.5T", "3.0T"],
+        "has_parameters": True,
+        "description": "Cardiac cross-section planning (LV two-chamber, horizontal long, short axial, four-chamber, three-chamber) using CardioLine with imaging conditions.",
+    },
+    {
         "id": "canon_aice_mr_whitepaper",
         "label": "Canon — AiCE Deep Learning Reconstruction (MRI white paper)",
         "filename": "637271900181629483SK-Advanced-intelligent-Clear-IQ-Engine-AiCE-Translating-the-Power-of-Deep-Learning-to-MR-Image-Reconstruction.pdf",
