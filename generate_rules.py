@@ -52,7 +52,7 @@ The JSON MUST match this exact structure and key names:
   "clinical_rationale": {
     "summary": "2-4 sentences summarizing the consensus from the available evidence and current neuroradiology best practice",
     "evidence_strength": "High | Moderate | Low",
-    "key_changes": "short paragraph explaining what has changed in 2024-2026 literature versus older standard protocols"
+    "key_changes": "short paragraph explaining what has changed in recent literature versus older standard protocols, or state that no significant changes were identified if the evidence is stable"
   },
   "study_rules": [
     {

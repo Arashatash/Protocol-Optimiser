@@ -83,7 +83,7 @@ The JSON MUST use this exact structure and key names:
   "clinical_rationale": {
     "summary": "2-4 sentences summarizing the consensus from the PubMed evidence",
     "evidence_strength": "High | Moderate | Low",
-    "key_changes": "short paragraph explaining what has changed in 2024-2026 literature versus older standard protocols"
+    "key_changes": "short paragraph explaining what has changed in recent literature versus older standard protocols, or state that no significant changes were identified if the evidence is stable"
   },
   "study_rules": [
     {
@@ -109,13 +109,19 @@ evidence_strength grading rubric (you MUST follow this, aligned with GRADE certa
 study_rules must be a non-empty array. series_protocols must be a non-empty object. Use numeric min/max in milliseconds for te_ms and tr_ms. Include target_duration_ms when literature suggests a typical total scan duration benchmark. Output valid JSON only."""
 
 
+_GOLD_JOURNAL_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(rf"^\s*{re.escape(label.strip())}\b", re.IGNORECASE)
+    for label in TOP_RADIOLOGY_JOURNALS
+]
+
+
 def journal_is_gold(journal: str) -> bool:
-    """Return True if the journal string matches our gold list (substring / alias aware)."""
+    """Return True if the journal string matches our gold list (word-boundary aware)."""
     if not journal or not journal.strip():
         return False
     j = journal.strip().lower()
-    for label in TOP_RADIOLOGY_JOURNALS:
-        if label.strip().lower() in j:
+    for pat in _GOLD_JOURNAL_PATTERNS:
+        if pat.search(j):
             return True
     for needle in _GOLD_EXTRA_NEEDLES:
         if needle in j:
@@ -176,19 +182,21 @@ def _multi_strategy_search(protocol_name: str, api_key: str | None = None) -> li
     Systematic-review-style search: three complementary PubMed queries merged and deduplicated.
     Returns a single PMID list (order preserved, duplicates removed).
     """
+    _current_year = datetime.now().year
+    _date_filter = f"2018:{_current_year}[dp]"
     queries = [
         (
             f'({protocol_name}) AND ("guidelines" OR "consensus" OR "recommendations") '
-            f'AND "Magnetic Resonance Imaging"[MeSH] AND 2018:2026[dp]'
+            f'AND "Magnetic Resonance Imaging"[MeSH] AND {_date_filter}'
         ),
         (
             f'({protocol_name}) AND ("Magnetic Resonance Imaging/methods"[MeSH]) '
             f'AND ("repetition time" OR "echo time" OR "sequence parameters" OR "flip angle") '
-            f"AND 2018:2026[dp]"
+            f"AND {_date_filter}"
         ),
         (
             f'({protocol_name}) AND ("protocol optimization" OR "accelerated" '
-            f'OR "acquisition time" OR "scan time") AND MRI AND 2018:2026[dp]'
+            f'OR "acquisition time" OR "scan time") AND MRI AND {_date_filter}'
         ),
     ]
     seen: set[str] = set()
@@ -241,16 +249,20 @@ def _extract_pub_year(value: str) -> int | None:
 _PARAM_PATTERNS: list[re.Pattern[str]] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"\bTE\s*[=:≈~]\s*\d",
-        r"\bTR\s*[=:≈~]\s*\d",
-        r"\b\d+\s*ms\b",
-        r"\b\d+\.?\d*\s*mm\b",
+        r"\bTE\s*[=:≈~]?\s*\d",
+        r"\bTR\s*[=:≈~]?\s*\d",
+        r"\bTI\s*[=:≈~]?\s*\d",
+        r"\b(?:TE|TR|TI|TE/TR)\b.*?\d+\s*ms",
+        r"\b(?:slice|thickness|voxel|resolution|FOV)\b.*?\d+\.?\d*\s*mm",
         r"\bflip\s*angle\s*[=:≈~]?\s*\d",
         r"\bFOV\s*[=:≈~]\s*\d",
         r"\bmatrix\s*[=:≈~]\s*\d",
         r"\bslice\s+thickness\s*[=:≈~]?\s*\d",
         r"\bb[- ]?value\s*[=:≈~]?\s*\d",
         r"\bvoxel\s+size\s*[=:≈~]?\s*\d",
+        r"\bNEX\s*[=:≈~]?\s*\d",
+        r"\bNSA\s*[=:≈~]?\s*\d",
+        r"\bbandwidth\s*[=:≈~]?\s*\d",
     ]
 ]
 
@@ -310,11 +322,19 @@ def fetch_pubmed_summaries(pmid_list: list[str], api_key: str | None = None) -> 
         sort_raw = str(sort_raw)
         sort_ts = _parse_sort_date(sort_raw)
         year = _extract_pub_year(sort_raw)
+
+        pmcid = None
+        for aid in article.get("articleids", []):
+            if isinstance(aid, dict) and aid.get("idtype") == "pmc" and aid.get("value"):
+                pmcid = str(aid["value"]).strip()
+                break
+
         out[str(uid)] = {
             "journal": journal,
             "sort_ts": sort_ts,
             "year": year,
             "high_impact": journal_is_gold(journal),
+            "pmcid": pmcid,
         }
 
     return out
@@ -449,12 +469,74 @@ def fetch_pubmed_abstracts_by_pmid(pmid_list: list[str], api_key: str | None = N
     return merged
 
 
+_PMC_CHUNK_SIZE = 10
+
+
+def _fetch_pmc_methods(pmcid_list: list[str], api_key: str | None = None) -> dict[str, str]:
+    """
+    Fetch Methods section text from PMC Open Access XML.
+    Returns mapping PMCID -> extracted methods text (may be empty if not OA or no methods section).
+    """
+    if not pmcid_list:
+        return {}
+
+    key = (api_key or NCBI_API_KEY or "").strip() or None
+    out: dict[str, str] = {}
+
+    for i in range(0, len(pmcid_list), _PMC_CHUNK_SIZE):
+        chunk = pmcid_list[i : i + _PMC_CHUNK_SIZE]
+        params = _ncbi_params(
+            {
+                "db": "pmc",
+                "id": ",".join(chunk),
+                "retmode": "xml",
+            }
+        )
+        if key:
+            params["api_key"] = key
+
+        try:
+            resp = requests.get(EFETCH_URL, params=params, timeout=120)
+            resp.raise_for_status()
+            xml_content = resp.text
+        except requests.RequestException:
+            continue
+
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError:
+            continue
+
+        for article_el in root.iter("article"):
+            pmc_tag = article_el.find(".//article-id[@pub-id-type='pmc']")
+            pmc_val = None
+            if pmc_tag is not None and pmc_tag.text:
+                pmc_val = pmc_tag.text.strip()
+                if not pmc_val.upper().startswith("PMC"):
+                    pmc_val = f"PMC{pmc_val}"
+
+            methods_parts: list[str] = []
+            for sec in article_el.iter("sec"):
+                sec_type = (sec.get("sec-type") or "").lower()
+                title_el = sec.find("title")
+                title_text = (title_el.text or "").lower() if title_el is not None else ""
+                if "method" in sec_type or "material" in sec_type or "method" in title_text or "material" in title_text:
+                    methods_parts.append("".join(sec.itertext()).strip())
+
+            if pmc_val and methods_parts:
+                out[pmc_val.upper()] = "\n\n".join(methods_parts)
+
+    return out
+
+
 def _build_user_rag_content(
     protocol_name: str,
     ranked_rows: list[dict[str, Any]],
     abstract_by_pmid: dict[str, str],
     scanner_tesla: float | None = None,
+    pmc_enriched_pmids: set[str] | None = None,
 ) -> str:
+    _pmc = pmc_enriched_pmids or set()
     blocks: list[str] = []
     for i, row in enumerate(ranked_rows, start=1):
         pmid = row["pmid"]
@@ -463,12 +545,14 @@ def _build_user_rag_content(
         density = row.get("param_density", 0)
         abstract = abstract_by_pmid.get(pmid, "").strip() or "(No abstract text in record.)"
         tier = "Gold-standard journal (high impact)" if gold else "Supporting journal"
+        source_label = "abstract+methods" if pmid in _pmc else "abstract"
         blocks.append(
             f"### Paper {i}\n"
             f"PMID: {pmid}\n"
             f"Journal: {journal}\n"
             f"High-impact (gold list): {'yes' if gold else 'no'} — {tier}\n"
-            f"Parameter density: {density} technical terms detected\n\n"
+            f"Parameter density: {density} technical terms detected\n"
+            f"Source depth: {source_label}\n\n"
             f"Abstract:\n{abstract}"
         )
     scanner_note = ""
@@ -514,7 +598,28 @@ def generate_rules_from_pubmed(
     print(f"Fetching abstracts for {len(pmids)} papers...")
     abstract_by_pmid = fetch_pubmed_abstracts_by_pmid(pmids, api_key=api_key)
 
-    # 4. Parameter-density scoring
+    # 3b. PMC Open Access full-text enrichment (Methods sections)
+    pmcid_to_pmid: dict[str, str] = {}
+    for pmid in pmids:
+        meta = summary_by_pmid.get(pmid, {})
+        pmcid = meta.get("pmcid")
+        if pmcid:
+            pmcid_to_pmid[pmcid.upper()] = pmid
+    pmc_source_pmids: set[str] = set()
+    if pmcid_to_pmid:
+        print(f"Fetching PMC Methods sections for {len(pmcid_to_pmid)} papers with PMCIDs...")
+        pmc_methods = _fetch_pmc_methods(list(pmcid_to_pmid.keys()), api_key=api_key)
+        for pmcid_key, methods_text in pmc_methods.items():
+            pmid = pmcid_to_pmid.get(pmcid_key)
+            if pmid and methods_text:
+                existing = abstract_by_pmid.get(pmid, "")
+                abstract_by_pmid[pmid] = (existing + "\n\n[Methods section from PMC full-text]\n" + methods_text).strip()
+                pmc_source_pmids.add(pmid)
+        print(f"  Enriched {len(pmc_source_pmids)} paper(s) with Methods text.")
+    else:
+        print("No PMCIDs found in summaries; skipping full-text enrichment.")
+
+    # 4. Parameter-density scoring (now includes Methods text where available)
     density_by_pmid = {pmid: _parameter_density(abstract_by_pmid.get(pmid, "")) for pmid in pmids}
     dense_count = sum(1 for d in density_by_pmid.values() if d >= 2)
     print(f"Parameter density: {dense_count}/{len(pmids)} papers have density >= 2")
@@ -539,6 +644,7 @@ def generate_rules_from_pubmed(
         ranked,
         abstract_by_pmid,
         scanner_tesla=scanner_tesla,
+        pmc_enriched_pmids=pmc_source_pmids,
     )
 
     payload = {

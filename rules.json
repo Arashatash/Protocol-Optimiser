@@ -1,52 +1,49 @@
 {
   "clinical_rationale": {
-    "summary": "The current evidence base for MS brain MRI protocol design emphasizes multiparametric acquisition including T1-weighted pre- and post-contrast imaging with subtraction maps, T2/FLAIR sequences for lesion burden assessment, and T2*-weighted or susceptibility-weighted imaging for cortical and infratentorial lesion detection. At 3T, the signal-to-noise ratio advantage over 1.5T allows thinner slices and higher spatial resolution without proportional scan time penalties, improving detection of small infratentorial and cortical lesions. Subtraction maps from co-registered pre- and post-contrast T1 sequences have been shown to reduce missed contrast-enhancing lesion rate by nearly 80%, making T1 subtraction a standard of care element. Emerging 7T data demonstrate further gains in lesion conspicuity but are not yet the routine clinical standard for MS brain protocols.",
-    "evidence_strength": "Moderate",
-    "key_changes": "The 2024-2026 literature, particularly from European Radiology (PMID 41468656), establishes T1 subtraction maps as a mandatory adjunct to standard post-contrast T1 imaging in MS, reducing false-negative examinations by approximately 90%. RadioGraphics (PMID 41411163) and Investigative Radiology (PMID 37185832) reinforce the growing role of 7T MRI for superior lesion detection and sodium MRI biomarkers, though these remain research-grade additions rather than routine protocol elements. The Pediatric Radiology abstract (PMID 40095042) at 7T identifies an optimal TE window of 20-30 ms for T2*-weighted sequences to balance contrast and artifact, consistent with established 3T practice. There is no new high-parameter-density evidence from Radiology or JMRI in this abstract set that would override the MAGNIMS/CMSC consensus parameter ranges; therefore, standard protocol values derived from those guidelines and clinical knowledge remain the primary reference, supplemented by the subtraction map evidence."
+    "summary": "The provided abstracts address advanced and quantitative MRI techniques for Multiple Sclerosis (MS) brain imaging, including ultrashort echo time myelin imaging (STAIR-UTE at 3T), quantitative T1 mapping for microstructural assessment, sodium MRI at 7T, and ultrahigh-field 7T neuroimaging broadly. None of the five abstracts provide parameter-dense (TE/TR explicit) data for a standard clinical MS brain protocol. The gold-standard journal evidence (Radiology, AJNR, RadioGraphics, European Radiology, Investigative Radiology) is focused on advanced/quantitative sequences rather than conventional clinical MS protocol parameters. Standard clinical MS brain MRI protocol parameters (FLAIR, T2, T1 pre/post, DWI, PDWI) are therefore synthesized primarily from established clinical knowledge and consensus guidelines (MAGNIMS, North American Imaging in MS), with the literature corroborating the importance of FLAIR for lesion detection and T1 mapping for microstructural characterization.",
+    "evidence_strength": "Low",
+    "key_changes": "Recent literature demonstrates a clear shift toward quantitative and advanced sequences in MS research imaging: STAIR-UTE enables direct myelin proton density imaging beyond conventional FLAIR; quantitative T1 mapping (variable flip angle) is increasingly validated as a biomarker of disability-relevant microstructural damage in normal-appearing white matter and grey matter in early RRMS; and sodium MRI at 7T reveals sodium concentration changes in MS subtypes sensitive to myelin loss. At 7T, superior lesion detection and cortical lesion conspicuity are well-documented. For routine clinical MS brain MRI, the MAGNIMS-CMSC consensus remains the backbone: 3D FLAIR is the primary lesion-detection sequence, supplemented by 3D T1-weighted (pre and post-gadolinium), DWI, and optionally PD/T2. No new consensus has displaced these standard sequences for routine 1.5T/3T clinical use, but the literature increasingly supports adding quantitative T1 mapping and potentially advanced myelin-sensitive sequences as the field matures toward clinical translation."
   },
   "study_rules": [
     {
       "id": "ms_brain_standard",
+      "study_description_substring": "Multiple Sclerosis Brain",
+      "required_series_keywords": [
+        "FLAIR",
+        "T2",
+        "T1",
+        "DWI",
+        "POST GAD"
+      ]
+    },
+    {
+      "id": "ms_brain_alt_1",
       "study_description_substring": "MS Brain",
       "required_series_keywords": [
         "FLAIR",
         "T2",
         "T1",
-        "T1 POST",
-        "T1 SUBTRACTION",
-        "DWI"
-      ]
-    },
-    {
-      "id": "ms_brain_with_contrast",
-      "study_description_substring": "Multiple Sclerosis Brain",
-      "required_series_keywords": [
-        "FLAIR",
-        "T2",
-        "T1 PRE",
-        "T1 POST CONTRAST",
-        "T1 SUBTRACTION",
         "DWI",
-        "SWI"
+        "POST GAD"
       ]
     },
     {
-      "id": "ms_brain_followup",
-      "study_description_substring": "MS Follow",
+      "id": "ms_brain_alt_2",
+      "study_description_substring": "Demyelinating Disease Brain",
       "required_series_keywords": [
         "FLAIR",
         "T2",
-        "T1 PRE",
-        "T1 POST",
-        "T1 SUBTRACTION"
+        "T1",
+        "DWI",
+        "POST GAD"
       ]
     }
   ],
   "series_protocols": {
-    "SAGITTAL 3D FLAIR": {
+    "SAG 3D FLAIR": {
       "te_ms": {
         "min": 80,
-        "max": 120
+        "max": 140
       },
       "tr_ms": {
         "min": 6000,
@@ -54,21 +51,32 @@
       },
       "target_duration_ms": 480000
     },
-    "AXIAL T2 TSE": {
+    "AX T2 FSE": {
       "te_ms": {
         "min": 80,
         "max": 120
       },
       "tr_ms": {
-        "min": 3500,
+        "min": 3000,
         "max": 6000
       },
       "target_duration_ms": 180000
     },
-    "AXIAL DWI": {
+    "AX PD/T2 DUAL ECHO": {
+      "te_ms": {
+        "min": 10,
+        "max": 120
+      },
+      "tr_ms": {
+        "min": 2500,
+        "max": 5000
+      },
+      "target_duration_ms": 240000
+    },
+    "AX DWI": {
       "te_ms": {
         "min": 60,
-        "max": 90
+        "max": 100
       },
       "tr_ms": {
         "min": 4000,
@@ -76,104 +84,71 @@
       },
       "target_duration_ms": 120000
     },
-    "AXIAL SWI": {
+    "SAG 3D T1 MPRAGE PRE": {
       "te_ms": {
-        "min": 20,
+        "min": 2,
+        "max": 4
+      },
+      "tr_ms": {
+        "min": 1700,
+        "max": 2300
+      },
+      "target_duration_ms": 360000
+    },
+    "SAG 3D T1 MPRAGE POST GAD": {
+      "te_ms": {
+        "min": 2,
+        "max": 4
+      },
+      "tr_ms": {
+        "min": 1700,
+        "max": 2300
+      },
+      "target_duration_ms": 360000
+    },
+    "AX T1 SE PRE": {
+      "te_ms": {
+        "min": 10,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 180000
+    },
+    "AX T1 SE POST GAD": {
+      "te_ms": {
+        "min": 10,
+        "max": 20
+      },
+      "tr_ms": {
+        "min": 400,
+        "max": 700
+      },
+      "target_duration_ms": 180000
+    },
+    "AX T2 STAR GRE": {
+      "te_ms": {
+        "min": 15,
         "max": 30
       },
       "tr_ms": {
-        "min": 27,
-        "max": 49
+        "min": 600,
+        "max": 1200
       },
-      "target_duration_ms": 240000
+      "target_duration_ms": 180000
     },
-    "SAGITTAL 3D T1 PRE CONTRAST": {
+    "SAG 3D T1 VFA MAP": {
       "te_ms": {
         "min": 2,
         "max": 5
       },
       "tr_ms": {
-        "min": 1900,
-        "max": 2300
+        "min": 15,
+        "max": 30
       },
       "target_duration_ms": 420000
-    },
-    "SAGITTAL 3D T1 POST CONTRAST": {
-      "te_ms": {
-        "min": 2,
-        "max": 5
-      },
-      "tr_ms": {
-        "min": 1900,
-        "max": 2300
-      },
-      "target_duration_ms": 420000
-    },
-    "SAGITTAL 3D T1 SUBTRACTION": {
-      "te_ms": {
-        "min": 2,
-        "max": 5
-      },
-      "tr_ms": {
-        "min": 1900,
-        "max": 2300
-      },
-      "target_duration_ms": 60000
-    },
-    "AXIAL T1 SE PRE CONTRAST": {
-      "te_ms": {
-        "min": 10,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 650
-      },
-      "target_duration_ms": 180000
-    },
-    "AXIAL T1 SE POST CONTRAST": {
-      "te_ms": {
-        "min": 10,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 650
-      },
-      "target_duration_ms": 180000
-    },
-    "AXIAL T1 SUBTRACTION MAP": {
-      "te_ms": {
-        "min": 10,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 400,
-        "max": 650
-      },
-      "target_duration_ms": 60000
-    },
-    "CORONAL T2 FLAIR": {
-      "te_ms": {
-        "min": 80,
-        "max": 120
-      },
-      "tr_ms": {
-        "min": 6000,
-        "max": 9000
-      },
-      "target_duration_ms": 180000
-    },
-    "SAGITTAL PD T2 TSE": {
-      "te_ms": {
-        "min": 14,
-        "max": 20
-      },
-      "tr_ms": {
-        "min": 2500,
-        "max": 4000
-      },
-      "target_duration_ms": 240000
     }
   }
 }
