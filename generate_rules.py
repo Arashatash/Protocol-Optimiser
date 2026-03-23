@@ -72,10 +72,10 @@ The JSON MUST match this exact structure and key names:
 
 Rules:
 - clinical_rationale: required for newly generated output. Explain the trade-offs between signal-to-noise and scan speed, including how those trade-offs differ in 1.5T versus 3T practice when relevant.
-- evidence_strength grading rubric (you MUST follow this):
-  - "High": you have strong, specific clinical evidence with explicit TE/TR or sequence parameter numbers from established neuroradiology practice.
-  - "Moderate": you have general clinical consensus but limited explicit parameter numbers from recent literature.
-  - "Low": the output relies primarily on your training knowledge with no specific literature backing.
+- evidence_strength grading rubric (you MUST follow this, aligned with GRADE certainty methodology):
+  - "High": you have strong, specific clinical evidence with explicit TE/TR or sequence parameter numbers from established neuroradiology practice (GRADE: high certainty).
+  - "Moderate": you have general clinical consensus but limited explicit parameter numbers from recent literature (GRADE: moderate certainty).
+  - "Low": the output relies primarily on your training knowledge with no specific literature backing (GRADE: very low certainty).
 - study_rules: at least one entry; required_series_keywords lists substrings that should appear in Series Description for critical sequences (e.g. SWI, DWI).
 - series_protocols: keys are typical Series Description strings; te_ms and tr_ms are echo/repetition time ranges in milliseconds (reasonable clinical ranges). Include target_duration_ms when you can estimate a typical total acquisition time benchmark.
 - Use numbers only for min/max (integers or decimals as appropriate).

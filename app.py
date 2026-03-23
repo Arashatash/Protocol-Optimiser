@@ -29,6 +29,13 @@ PRIVACY_NOTICE = (
 )
 
 
+_EVIDENCE_EXPLANATIONS: dict[str, str] = {
+    "high": "Multiple authoritative abstracts contained explicit MRI parameter data (GRADE: high certainty).",
+    "moderate": "Parameter data was available but limited in source authority or specificity (GRADE: moderate certainty).",
+    "low": "PubMed abstracts lacked explicit parameters; the model used established consensus guidelines (GRADE: very low certainty).",
+}
+
+
 def _evidence_badge_html(level: str | None) -> str:
     palette = {
         "high": ("#e8f5e9", "#1b5e20"),
@@ -53,11 +60,14 @@ def _build_source_rows(sources: Any) -> list[dict[str, str]]:
             continue
         year = src.get("year")
         year_label = str(year) if year is not None else "-"
+        density = src.get("param_density")
+        density_label = str(density) if density is not None else "-"
         rows.append(
             {
                 "Year": year_label,
                 "Journal": str(src.get("journal") or "Unknown"),
                 "Impact Factor ⭐": "⭐" if src.get("high_impact") else "-",
+                "Param Density": density_label,
                 "PMID": str(src.get("pmid") or "-"),
             }
         )
@@ -187,6 +197,9 @@ def main() -> None:
             with c2:
                 st.markdown("#### Evidence strength")
                 st.markdown(_evidence_badge_html(evidence_strength), unsafe_allow_html=True)
+                explanation = _EVIDENCE_EXPLANATIONS.get(evidence_strength.lower(), "")
+                if explanation:
+                    st.caption(explanation)
 
             st.markdown("#### 2024-2026 changes versus older protocols")
             st.write(key_changes or "No literature delta summary is available in the current rules snapshot.")
@@ -197,8 +210,8 @@ def main() -> None:
         if source_rows:
             st.table(source_rows)
             st.caption(
-                "Impact Factor ⭐ uses the app's gold-journal heuristic: starred journals are treated as "
-                "high-impact clinical authorities for protocol synthesis."
+                "Impact Factor ⭐ = gold-journal heuristic. "
+                "Param Density = regex count of explicit MRI parameter terms (TE, TR, ms, mm, etc.) in the abstract."
             )
         else:
             st.caption(

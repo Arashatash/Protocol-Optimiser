@@ -102,10 +102,10 @@ The JSON MUST use this exact structure and key names:
 }
 
 clinical_rationale must be present and should read like a concise executive brief.
-evidence_strength grading rubric (you MUST follow this):
-- "High": at least 2 of the provided abstracts are from gold-standard journals AND contain explicit TE/TR or sequence parameter numbers.
-- "Moderate": gold-standard journal abstracts are present but lack specific parameter numbers, OR only non-gold journals provide explicit numbers.
-- "Low": no abstracts contain explicit MRI parameter numbers and the output relies primarily on your training knowledge.
+evidence_strength grading rubric (you MUST follow this, aligned with GRADE certainty methodology):
+- "High": at least 2 abstracts with parameter_density >= 3 from gold-standard journals (GRADE: high certainty -- consistent, parameter-rich evidence from authoritative sources).
+- "Moderate": gold-standard journal abstracts present but parameter_density < 3, OR only non-gold journals provide parameter-dense data (GRADE: moderate certainty -- evidence available but limited in source authority or specificity).
+- "Low": no abstracts have parameter_density >= 2 and the output relies primarily on your training knowledge (GRADE: very low certainty -- indirect evidence only).
 study_rules must be a non-empty array. series_protocols must be a non-empty object. Use numeric min/max in milliseconds for te_ms and tr_ms. Include target_duration_ms when literature suggests a typical total scan duration benchmark. Output valid JSON only."""
 
 
@@ -171,6 +171,43 @@ def get_pubmed_ids(query: str, api_key: str | None = None) -> list[str]:
     return [str(x) for x in idlist]
 
 
+def _multi_strategy_search(protocol_name: str, api_key: str | None = None) -> list[str]:
+    """
+    Systematic-review-style search: three complementary PubMed queries merged and deduplicated.
+    Returns a single PMID list (order preserved, duplicates removed).
+    """
+    queries = [
+        (
+            f'({protocol_name}) AND ("guidelines" OR "consensus" OR "recommendations") '
+            f'AND "Magnetic Resonance Imaging"[MeSH] AND 2018:2026[dp]'
+        ),
+        (
+            f'({protocol_name}) AND ("Magnetic Resonance Imaging/methods"[MeSH]) '
+            f'AND ("repetition time" OR "echo time" OR "sequence parameters" OR "flip angle") '
+            f"AND 2018:2026[dp]"
+        ),
+        (
+            f'({protocol_name}) AND ("protocol optimization" OR "accelerated" '
+            f'OR "acquisition time" OR "scan time") AND MRI AND 2018:2026[dp]'
+        ),
+    ]
+    seen: set[str] = set()
+    merged: list[str] = []
+    for i, q in enumerate(queries, start=1):
+        label = ["Clinical guidelines", "Technical parameters", "Protocol optimization"][i - 1]
+        print(f"  Strategy {i} ({label}): {q[:120]}...")
+        try:
+            ids = get_pubmed_ids(q, api_key=api_key)
+        except RuntimeError:
+            ids = []
+        print(f"    -> {len(ids)} PMIDs")
+        for pmid in ids:
+            if pmid not in seen:
+                seen.add(pmid)
+                merged.append(pmid)
+    return merged
+
+
 def _parse_sort_date(sortpubdate: str) -> float:
     """Parse PubMed esummary sortpubdate / pubdate to a sortable float (higher = more recent)."""
     if not sortpubdate or not str(sortpubdate).strip():
@@ -199,6 +236,30 @@ def _extract_pub_year(value: str) -> int | None:
         return int(m.group(0))
     except ValueError:
         return None
+
+
+_PARAM_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\bTE\s*[=:≈~]\s*\d",
+        r"\bTR\s*[=:≈~]\s*\d",
+        r"\b\d+\s*ms\b",
+        r"\b\d+\.?\d*\s*mm\b",
+        r"\bflip\s*angle\s*[=:≈~]?\s*\d",
+        r"\bFOV\s*[=:≈~]\s*\d",
+        r"\bmatrix\s*[=:≈~]\s*\d",
+        r"\bslice\s+thickness\s*[=:≈~]?\s*\d",
+        r"\bb[- ]?value\s*[=:≈~]?\s*\d",
+        r"\bvoxel\s+size\s*[=:≈~]?\s*\d",
+    ]
+]
+
+
+def _parameter_density(abstract_text: str) -> int:
+    """Count distinct MRI parameter pattern hits in abstract text."""
+    if not abstract_text:
+        return 0
+    return sum(1 for pat in _PARAM_PATTERNS if pat.search(abstract_text))
 
 
 def fetch_pubmed_summaries(pmid_list: list[str], api_key: str | None = None) -> dict[str, dict[str, Any]]:
@@ -262,10 +323,13 @@ def fetch_pubmed_summaries(pmid_list: list[str], api_key: str | None = None) -> 
 def select_top_five_pmids(
     pmids_ordered: list[str],
     summary_by_pmid: dict[str, dict[str, Any]],
+    density_by_pmid: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Gold journals first, then most recent (sort_ts descending). Return top 5 rows with metadata.
+    Composite ranking: gold journal > recency > parameter density > date.
+    Return top 5 rows with metadata including param_density.
     """
+    _density = density_by_pmid or {}
     rows: list[dict[str, Any]] = []
     for pmid in pmids_ordered:
         meta = summary_by_pmid.get(pmid)
@@ -277,6 +341,7 @@ def select_top_five_pmids(
                     "sort_ts": 0.0,
                     "year": None,
                     "high_impact": False,
+                    "param_density": _density.get(pmid, 0),
                 }
             )
             continue
@@ -287,6 +352,7 @@ def select_top_five_pmids(
                 "sort_ts": float(meta["sort_ts"]),
                 "year": meta.get("year"),
                 "high_impact": bool(meta["high_impact"]),
+                "param_density": _density.get(pmid, 0),
             }
         )
 
@@ -294,6 +360,7 @@ def select_top_five_pmids(
     rows.sort(key=lambda r: (
         0 if r["high_impact"] else 1,
         0 if isinstance(r.get("year"), int) and r["year"] >= _RECENCY_FLOOR else 1,
+        -r["param_density"],
         -r["sort_ts"],
     ))
     return rows[:5]
@@ -325,10 +392,8 @@ def _abstract_from_article(article: ET.Element) -> str:
     return "\n\n".join(parts)
 
 
-def fetch_pubmed_abstracts_by_pmid(pmid_list: list[str], api_key: str | None = None) -> dict[str, str]:
-    """
-    EFetch XML: return mapping PMID -> abstract text (per PubmedArticle).
-    """
+def _fetch_abstracts_chunk(pmid_list: list[str], api_key: str | None = None) -> dict[str, str]:
+    """EFetch XML for a single chunk of PMIDs -> mapping PMID -> abstract text."""
     if not pmid_list:
         return {}
 
@@ -367,6 +432,23 @@ def fetch_pubmed_abstracts_by_pmid(pmid_list: list[str], api_key: str | None = N
     return by_pmid
 
 
+_EFETCH_CHUNK_SIZE = 20
+
+
+def fetch_pubmed_abstracts_by_pmid(pmid_list: list[str], api_key: str | None = None) -> dict[str, str]:
+    """
+    EFetch XML: return mapping PMID -> abstract text.
+    Chunks requests into groups of 20 to respect NCBI rate limits.
+    """
+    if not pmid_list:
+        return {}
+    merged: dict[str, str] = {}
+    for i in range(0, len(pmid_list), _EFETCH_CHUNK_SIZE):
+        chunk = pmid_list[i : i + _EFETCH_CHUNK_SIZE]
+        merged.update(_fetch_abstracts_chunk(chunk, api_key=api_key))
+    return merged
+
+
 def _build_user_rag_content(
     protocol_name: str,
     ranked_rows: list[dict[str, Any]],
@@ -378,13 +460,15 @@ def _build_user_rag_content(
         pmid = row["pmid"]
         journal = row["journal"]
         gold = row["high_impact"]
+        density = row.get("param_density", 0)
         abstract = abstract_by_pmid.get(pmid, "").strip() or "(No abstract text in record.)"
         tier = "Gold-standard journal (high impact)" if gold else "Supporting journal"
         blocks.append(
             f"### Paper {i}\n"
             f"PMID: {pmid}\n"
             f"Journal: {journal}\n"
-            f"High-impact (gold list): {'yes' if gold else 'no'} — {tier}\n\n"
+            f"High-impact (gold list): {'yes' if gold else 'no'} — {tier}\n"
+            f"Parameter density: {density} technical terms detected\n\n"
             f"Abstract:\n{abstract}"
         )
     scanner_note = ""
@@ -406,51 +490,49 @@ def generate_rules_from_pubmed(
     scanner_tesla: float | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
-    Search PubMed, rank by gold journal + recency, fetch top 5 abstracts, call OpenRouter.
-    Returns (validated rules dict, list of source dicts: pmid, journal, high_impact).
+    Systematic multi-strategy PubMed search, parameter-density scoring, composite ranking,
+    then OpenRouter synthesis.
+    Returns (validated rules dict, list of source dicts with density metadata).
     """
     if not OPENROUTER_API_KEY:
         raise RuntimeError(
             "OPENROUTER_API_KEY is not set. Set it in your environment before running this script."
         )
 
-    query = (
-        f"({protocol_name}) AND (MRI OR magnetic resonance) "
-        f'AND ("sequence parameters" OR "repetition time" OR "echo time" OR "protocol" OR "guidelines") '
-        f"AND 2018:2026[dp]"
-    )
-    print(f"PubMed query: {query!r}")
-
-    try:
-        pmids = get_pubmed_ids(query, api_key=api_key)
-    except RuntimeError:
-        raise
-
-    print(f"Found PMIDs ({len(pmids)}): {pmids[:8]}{'...' if len(pmids) > 8 else ''}")
+    # 1. Multi-strategy search
+    print("Running multi-strategy PubMed search...")
+    pmids = _multi_strategy_search(protocol_name, api_key=api_key)
+    print(f"Deduplicated pool: {len(pmids)} PMIDs")
 
     if not pmids:
-        raise RuntimeError("No PubMed articles returned for this query. Try a different protocol name.")
+        raise RuntimeError("No PubMed articles returned for any search strategy. Try a different protocol name.")
 
-    try:
-        summary_by_pmid = fetch_pubmed_summaries(pmids, api_key=api_key)
-    except RuntimeError:
-        raise
+    # 2. Summaries (journal + year metadata)
+    summary_by_pmid = fetch_pubmed_summaries(pmids, api_key=api_key)
 
-    ranked = select_top_five_pmids(pmids, summary_by_pmid)
+    # 3. Fetch ALL abstracts (chunked for large pools)
+    print(f"Fetching abstracts for {len(pmids)} papers...")
+    abstract_by_pmid = fetch_pubmed_abstracts_by_pmid(pmids, api_key=api_key)
+
+    # 4. Parameter-density scoring
+    density_by_pmid = {pmid: _parameter_density(abstract_by_pmid.get(pmid, "")) for pmid in pmids}
+    dense_count = sum(1 for d in density_by_pmid.values() if d >= 2)
+    print(f"Parameter density: {dense_count}/{len(pmids)} papers have density >= 2")
+
+    # 5. Composite ranking (gold, recency, density, date)
+    ranked = select_top_five_pmids(pmids, summary_by_pmid, density_by_pmid)
     top_pmids = [r["pmid"] for r in ranked]
-    print(f"Selected top {len(ranked)} PMIDs after gold + recency ranking: {top_pmids}")
+    print(f"Top {len(ranked)} after composite ranking: {top_pmids}")
+    for r in ranked:
+        star = "*" if r["high_impact"] else " "
+        print(f"  [{star}] PMID {r['pmid']} density={r['param_density']} — {r['journal']}")
 
-    try:
-        abstract_by_pmid = fetch_pubmed_abstracts_by_pmid(top_pmids, api_key=api_key)
-    except RuntimeError:
-        raise
-
+    # 6. Filter papers with empty abstracts
     ranked = [r for r in ranked if abstract_by_pmid.get(r["pmid"], "").strip()]
     if not ranked:
-        print("Warning: no AbstractText extracted from efetch; the model will rely on protocol name and labels.")
+        print("Warning: no usable abstracts survived filtering; the model will rely on training knowledge.")
     else:
         print(f"After abstract filter: {len(ranked)} paper(s) with usable abstracts.")
-    top_pmids = [r["pmid"] for r in ranked]
 
     user_content = _build_user_rag_content(
         protocol_name,
@@ -510,6 +592,7 @@ def generate_rules_from_pubmed(
             "journal": r["journal"],
             "year": r.get("year"),
             "high_impact": r["high_impact"],
+            "param_density": r.get("param_density", 0),
         }
         for r in ranked
     ]
