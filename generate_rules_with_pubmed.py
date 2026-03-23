@@ -70,13 +70,18 @@ ONE_POINT_FIVE_T_NOTE = (
     "optimized for 1.5T signal-to-noise ratios, even if the PubMed abstracts focus on 3T."
 )
 
-RAG_SYSTEM_PROMPT = """You are an expert MRI Radiologist. I will provide you with up to five PubMed abstracts, and optionally a user-provided reference document (e.g. society guidelines, site protocol). Each PubMed block is labeled with its PMID, source journal, and whether it is a high-impact gold-standard source.
+RAG_SYSTEM_PROMPT = """You are an expert MRI Radiologist. I will provide you with up to five PubMed abstracts, and optionally one or both of: an OEM vendor reference document (e.g. Canon, GE, Siemens, or Philips protocol guide) and a user-provided site-specific reference document (e.g. society guidelines, local departmental protocol). Each PubMed block is labeled with its PMID, source journal, and whether it is a high-impact gold-standard source. Supplementary documents are labeled with their source type and weighting instructions.
 
-Weighting rules (critical):
-- Papers from Radiology, Journal of Magnetic Resonance Imaging (JMRI), and AJNR are high-impact gold standards; give their reported sequence parameters and timing the HIGHEST weight when synthesizing rules.
-- Other journals in our gold list (European Radiology, RadioGraphics, Investigative Radiology, American Journal of Roentgenology) are also strong evidence; weight them highly but below the three above when they conflict with those three.
+Evidence hierarchy (critical — you MUST follow this priority order when sources conflict):
+1. HIGHEST: Gold-standard PubMed journals (Radiology, JMRI, AJNR). Their reported sequence parameters and timing carry the most weight.
+2. HIGH: Other gold-list PubMed journals (European Radiology, RadioGraphics, Investigative Radiology, AJR). Weight them highly but below tier 1 when they conflict.
+3. MODERATE: OEM vendor reference documents. These contain manufacturer-recommended default parameters and are authoritative for vendor-specific implementations, but may not reflect evidence-based consensus. Use them to fill gaps when PubMed sources lack explicit parameters for the requested protocol.
+4. SITE-SPECIFIC: User-provided site documents. When these contain explicit TE/TR or sequence parameters, prefer them for site-specific benchmarks — they represent local clinical decisions that override OEM defaults.
+5. LOWEST: Your training knowledge. Use only when all other sources lack explicit parameters.
+
+Additional rules:
 - If a lower-tier or non-gold journal contradicts a gold-standard journal, FOLLOW THE GOLD-STANDARD source.
-- When a user-provided reference document is included and contains explicit TE/TR or sequence parameters, prefer those numbers for site-specific benchmarks; use PubMed gold-standard sources for general consensus when both are parameter-rich.
+- OEM documents may contain vendor-optimized parameters that differ from evidence-based consensus; always flag this in clinical_rationale when you notice a discrepancy.
 
 Act as a Senior Neuroradiology Consultant. Use your reasoning capability to explain the trade-offs between signal-to-noise and scan speed for the current hardware (1.5T vs 3T).
 
@@ -615,14 +620,14 @@ def _build_user_rag_content(
 
     supplement_block = ""
     if supplementary_text and supplementary_text.strip():
-        fname = supplementary_filename or "user_document"
+        fname = supplementary_filename or "reference_document"
         sup_density = _parameter_density(supplementary_text)
         supplement_block = (
-            f"### User-provided reference document\n"
-            f"Filename: {fname}\n"
+            f"### Reference document(s)\n"
+            f"Source: {fname}\n"
             f"Parameter density: {sup_density} technical terms detected\n"
-            f"Instructions: Prefer explicit TE/TR and timing from this block for "
-            f"site-specific benchmarks when they conflict with sparse abstracts.\n\n"
+            f"Instructions: Apply the evidence hierarchy from your system instructions "
+            f"to weight these sources correctly relative to PubMed literature.\n\n"
             f"{supplementary_text.strip()}\n\n---\n\n"
         )
 
@@ -773,14 +778,46 @@ def generate_rules_from_pubmed(
 
     sources_out: list[dict[str, Any]] = []
     if prepared_supplement:
-        sources_out.append({
-            "source": "user_document",
-            "pmid": None,
-            "journal": supplementary_filename or "User document",
-            "year": None,
-            "high_impact": False,
-            "param_density": _parameter_density(prepared_supplement),
-        })
+        _has_oem = "[OEM VENDOR REFERENCE" in (supplementary_text or "")
+        _has_site = "[SITE-SPECIFIC REFERENCE" in (supplementary_text or "")
+        if _has_oem and _has_site:
+            _name_parts = (supplementary_filename or "").split(" + ", 1)
+            oem_name = _name_parts[0] if len(_name_parts) > 0 else "OEM document"
+            site_name = _name_parts[1] if len(_name_parts) > 1 else "Site document"
+            sources_out.append({
+                "source": "oem_document",
+                "pmid": None,
+                "journal": oem_name,
+                "year": None,
+                "high_impact": False,
+                "param_density": _parameter_density(prepared_supplement),
+            })
+            sources_out.append({
+                "source": "user_document",
+                "pmid": None,
+                "journal": site_name,
+                "year": None,
+                "high_impact": False,
+                "param_density": _parameter_density(prepared_supplement),
+            })
+        elif _has_oem:
+            sources_out.append({
+                "source": "oem_document",
+                "pmid": None,
+                "journal": supplementary_filename or "OEM document",
+                "year": None,
+                "high_impact": False,
+                "param_density": _parameter_density(prepared_supplement),
+            })
+        else:
+            sources_out.append({
+                "source": "user_document",
+                "pmid": None,
+                "journal": supplementary_filename or "User document",
+                "year": None,
+                "high_impact": False,
+                "param_density": _parameter_density(prepared_supplement),
+            })
     sources_out.extend(
         {
             "pmid": r["pmid"],

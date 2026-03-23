@@ -15,6 +15,13 @@ import streamlit as st
 from dicom_parser import parse_dicom
 from generate_rules import write_rules_file
 from generate_rules_with_pubmed import generate_rules_from_pubmed, _extract_text_from_pdf_bytes
+from oem_registry import (
+    get_doc_by_id,
+    get_docs_for_manufacturer,
+    get_manufacturers,
+    normalize_manufacturer,
+    resolve_doc_path,
+)
 from rule_engine import evaluate, load_rules
 
 CONTACT_EMAIL = "arash.atashnama@gmail.com"
@@ -57,6 +64,16 @@ def _build_source_rows(sources: Any) -> list[dict[str, str]]:
         return rows
     for src in sources:
         if not isinstance(src, dict):
+            continue
+        if src.get("source") == "oem_document":
+            density = src.get("param_density")
+            rows.append({
+                "Year": "-",
+                "Journal": f"🏭 {src.get('journal') or 'OEM document'}",
+                "Impact Factor ⭐": "-",
+                "Param Density": str(density) if density is not None else "-",
+                "PMID": "-",
+            })
             continue
         if src.get("source") == "user_document":
             density = src.get("param_density")
@@ -105,6 +122,10 @@ def main() -> None:
         st.session_state.guideline_target_scanner = "Not specified"
     if "last_supplement_used" not in st.session_state:
         st.session_state.last_supplement_used = False
+    if "last_oem_doc_used" not in st.session_state:
+        st.session_state.last_oem_doc_used = None
+    if "detected_manufacturer" not in st.session_state:
+        st.session_state.detected_manufacturer = None
 
     # --- Sidebar ---
     with st.sidebar:
@@ -136,7 +157,48 @@ def main() -> None:
             st.info(ONE_POINT_FIVE_T_NOTE)
 
         st.markdown("---")
-        st.caption("**Optional:** attach a reference document (society guideline, site protocol) to boost evidence strength.")
+        st.subheader("OEM Reference Document")
+        st.caption("Select a vendor protocol guide to include as evidence in the RAG pipeline (max 1).")
+
+        _oem_manufacturers = get_manufacturers()
+        _detected = st.session_state.detected_manufacturer
+        _default_mfr_idx = 0
+        if _detected and _detected in _oem_manufacturers:
+            _default_mfr_idx = _oem_manufacturers.index(_detected) + 1
+
+        oem_manufacturer = st.selectbox(
+            "Scanner manufacturer",
+            options=["Not specified"] + _oem_manufacturers,
+            index=_default_mfr_idx,
+            key="oem_manufacturer_select",
+            help="Filter available OEM reference documents by manufacturer. Auto-suggested from DICOM when available.",
+        )
+
+        selected_oem_doc_id: str | None = None
+        if oem_manufacturer != "Not specified":
+            _docs = get_docs_for_manufacturer(oem_manufacturer)
+            _doc_options = {doc["id"]: doc for doc in _docs}
+            _labels = ["None"] + [doc["label"] for doc in _docs]
+            _ids = [None] + [doc["id"] for doc in _docs]
+
+            chosen_idx = st.selectbox(
+                "OEM reference document",
+                options=range(len(_labels)),
+                format_func=lambda i: _labels[i],
+                key="oem_doc_select",
+                help="Choose one document to include. Documents with explicit parameters are most useful.",
+            )
+            selected_oem_doc_id = _ids[chosen_idx]
+
+            if selected_oem_doc_id:
+                _chosen_doc = _doc_options[selected_oem_doc_id]
+                _param_tag = "Contains explicit parameters" if _chosen_doc["has_parameters"] else "Overview / context only"
+                st.caption(f"{_chosen_doc['description']}\n\n**{_param_tag}** · {', '.join(_chosen_doc['field_strengths'])}")
+        else:
+            st.caption("Select a manufacturer to see available documents.")
+
+        st.markdown("---")
+        st.caption("**Optional:** attach your own site reference document (society guideline, site protocol) to boost evidence strength.")
         ref_file = st.file_uploader(
             "Reference document (PDF or TXT)",
             type=["pdf", "txt"],
@@ -153,21 +215,67 @@ def main() -> None:
 
         if st.button("Sync with PubMed", type="primary", use_container_width=True):
             st.session_state.last_sync_error = None
+            st.session_state.last_oem_doc_used = None
 
-            supplement_text: str | None = None
-            supplement_name: str | None = None
+            # --- OEM document ---
+            oem_text: str | None = None
+            oem_label: str | None = None
+            oem_meta: dict | None = None
+            if selected_oem_doc_id:
+                oem_meta = get_doc_by_id(selected_oem_doc_id)
+                if oem_meta:
+                    oem_path = resolve_doc_path(oem_meta)
+                    if oem_path.is_file():
+                        oem_text = _extract_text_from_pdf_bytes(oem_path.read_bytes())
+                        oem_label = oem_meta["label"]
+                        if not oem_text:
+                            st.warning(f"No text extracted from OEM document ({oem_meta['filename']}). Proceeding without it.")
+                            oem_text = None
+                    else:
+                        st.warning(f"OEM document file not found: {oem_meta['filename']}")
+
+            # --- User site document ---
+            site_text: str | None = None
+            site_name: str | None = None
             if ref_file is not None:
-                supplement_name = ref_file.name
+                site_name = ref_file.name
                 raw_bytes = ref_file.getvalue()
                 if ref_file.name.lower().endswith(".pdf"):
-                    supplement_text = _extract_text_from_pdf_bytes(raw_bytes)
-                    if not supplement_text:
+                    site_text = _extract_text_from_pdf_bytes(raw_bytes)
+                    if not site_text:
                         st.warning("No text could be extracted from the PDF (it may be scanned/image-only). Proceeding without it.")
                 else:
-                    supplement_text = raw_bytes.decode("utf-8", errors="replace")
+                    site_text = raw_bytes.decode("utf-8", errors="replace")
             elif ref_paste and ref_paste.strip():
-                supplement_text = ref_paste.strip()
-                supplement_name = "pasted_excerpt"
+                site_text = ref_paste.strip()
+                site_name = "pasted_excerpt"
+
+            # --- Merge OEM + site into combined supplement ---
+            combined_parts: list[str] = []
+            combined_name_parts: list[str] = []
+            if oem_text:
+                combined_parts.append(
+                    f"[OEM VENDOR REFERENCE — {oem_label}]\n"
+                    f"Source type: OEM vendor protocol document\n"
+                    f"Manufacturer: {oem_meta['manufacturer']}\n"
+                    f"Has explicit parameters: {'yes' if oem_meta['has_parameters'] else 'no'}\n"
+                    f"Weighting: Use as vendor-recommended defaults. Rank BELOW gold-standard "
+                    f"PubMed literature but ABOVE model training knowledge.\n\n"
+                    f"{oem_text}"
+                )
+                combined_name_parts.append(oem_label)
+            if site_text:
+                combined_parts.append(
+                    f"[SITE-SPECIFIC REFERENCE — {site_name}]\n"
+                    f"Source type: User-provided site document\n"
+                    f"Weighting: When this document contains explicit TE/TR or sequence "
+                    f"parameters, prefer them for site-specific benchmarks over OEM defaults.\n\n"
+                    f"{site_text}"
+                )
+                combined_name_parts.append(site_name or "site_document")
+
+            supplement_text = "\n\n---\n\n".join(combined_parts) if combined_parts else None
+            supplement_name = " + ".join(combined_name_parts) if combined_name_parts else None
 
             try:
                 with st.spinner("Searching PubMed and updating rules..."):
@@ -180,7 +288,8 @@ def main() -> None:
                     write_rules_file(data)
                     st.session_state.last_sync_sources = sources
                     st.session_state.last_pmids = [s.get("pmid") for s in sources if s.get("pmid")]
-                    st.session_state.last_supplement_used = bool(supplement_text and supplement_text.strip())
+                    st.session_state.last_supplement_used = bool(site_text and site_text.strip())
+                    st.session_state.last_oem_doc_used = oem_label if oem_text else None
                     st.session_state.rules_version = st.session_state.rules_version + 1
             except Exception as exc:
                 st.session_state.last_sync_error = str(exc)
@@ -189,12 +298,19 @@ def main() -> None:
             st.error(st.session_state.last_sync_error)
         elif st.session_state.last_pmids is not None and st.session_state.last_sync_error is None:
             st.success("Guidelines synced. `rules.json` updated.")
+            if st.session_state.get("last_oem_doc_used"):
+                st.info(f"OEM reference included: **{st.session_state.last_oem_doc_used}**", icon="🏭")
             if st.session_state.get("last_supplement_used"):
-                st.info("Reference document included in synthesis.", icon="📎")
+                st.info("Site reference document included in synthesis.", icon="📎")
             st.caption("Synced sources (top 5 after journal ranking)")
             sources = st.session_state.last_sync_sources
             if sources and isinstance(sources[0], dict):
                 for src in sources:
+                    if src.get("source") == "oem_document":
+                        fname = src.get("journal") or "OEM document"
+                        density = src.get("param_density", 0)
+                        st.markdown(f"- 🏭 **{fname}** (param density: {density})")
+                        continue
                     if src.get("source") == "user_document":
                         fname = src.get("journal") or "User document"
                         density = src.get("param_density", 0)
@@ -316,6 +432,11 @@ def main() -> None:
         parsed = parse_dicom(tmp_path)
         result = evaluate(parsed, rules)
         st.session_state.last_magnetic_field_strength_t = parsed.get("magnetic_field_strength_t")
+
+        _raw_mfr = parsed.get("manufacturer", "Unknown")
+        _normalized_mfr = normalize_manufacturer(_raw_mfr)
+        if _normalized_mfr and st.session_state.detected_manufacturer != _normalized_mfr:
+            st.session_state.detected_manufacturer = _normalized_mfr
 
     finally:
         if tmp_path and os.path.isfile(tmp_path):
