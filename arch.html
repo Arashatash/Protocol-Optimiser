@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protocol Optimiser — Architecture</title>
+<style>
+  :root {
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #5f5e5a;
+    --color-text-tertiary: #888780;
+    --font-sans: system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-text-primary: #e8e6dc;
+      --color-text-secondary: #b4b2a9;
+      --color-text-tertiary: #888780;
+    }
+    body { background: #1c1c1a; }
+    .mod { background: #222220 !important; border-color: rgba(255,255,255,0.15) !important; }
+    .ext { background: #1a2230 !important; border-color: #2e5a8a !important; }
+    .note { color: var(--color-text-secondary) !important; }
+    .conn-label { color: var(--color-text-secondary) !important; }
+    .tag { background: rgba(255,255,255,0.08) !important; color: var(--color-text-secondary) !important; }
+    .diamond-svg polygon { stroke: rgba(255,255,255,0.4) !important; }
+    .diamond-svg text { fill: var(--color-text-primary) !important; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; font-family: var(--font-sans); background: #f9f8f4; }
+  .wrap { max-width: 660px; margin: 0 auto; font-size: 12px; line-height: 1.4; color: var(--color-text-primary); }
+  h1 { font-size: 16px; font-weight: 500; margin: 0 0 6px; }
+  .subtitle { font-size: 11.5px; color: var(--color-text-secondary); margin: 0 0 20px; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .03em; margin: 24px 0 10px; color: var(--color-text-primary); }
+
+  .ext { border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid #85B7EB; background: #E6F1FB; }
+  .mod { border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid rgba(0,0,0,0.12); background: #fff; }
+  .mlabel { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; opacity: .5; }
+  .mname { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .mdesc { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 10px; }
+
+  .fn { border-radius: 6px; padding: 6px 11px; margin: 0 auto 3px; display: block; font-size: 11.5px; line-height: 1.4; text-align: center; max-width: 100%; color: #fff; }
+  .fp { background: #534AB7; }
+  .fb { background: #185FA5; }
+  .fo { background: #854F0B; }
+  .fg { background: #3B6D11; }
+  .fe { background: #0F6E56; }
+  .fs { background: #7c3aed; }
+
+  .arr { text-align: center; color: var(--color-text-tertiary); line-height: 1.9; font-size: 13px; }
+  .note { font-size: 10.5px; line-height: 1.45; color: #5f5e5a; text-align: center; margin: 2px auto 8px; max-width: 95%; font-style: italic; }
+
+  .conn { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 5px 10px; border-radius: 6px; background: rgba(0,0,0,0.03); }
+  .conn-arrow { font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0; }
+  .conn-label { font-size: 10.5px; color: var(--color-text-secondary); }
+
+  .tag { display: inline-block; font-size: 9.5px; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,0.06); color: var(--color-text-secondary); margin: 1px 2px; font-family: ui-monospace, monospace; }
+
+  .two-col { display: flex; gap: 10px; }
+  .two-col > * { flex: 1; }
+
+  .sep { text-align: center; color: var(--color-text-tertiary); font-size: 18px; line-height: 2; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Protocol Optimiser — System Architecture</h1>
+  <p class="subtitle">Six Python modules, three external services, one rules.json file connecting them all.</p>
+
+  <!-- ============================================================ -->
+  <h2>External Services</h2>
+
+  <div class="two-col">
+    <div class="ext">
+      <div class="mlabel">Data source</div>
+      <div class="mname">NCBI PubMed + PMC (E-utilities API)</div>
+      <div class="mdesc">The US National Library of Medicine's free API for searching and retrieving biomedical literature, including PubMed Central full-text when Open Access.</div>
+      <div class="fn fe" style="font-size:10.5px">esearch — find PMIDs matching a query</div>
+      <div class="arr">↓</div>
+      <div class="fn fe" style="font-size:10.5px">esummary — lightweight metadata (journal, date, PMCID)</div>
+      <div class="arr">↓</div>
+      <div class="fn fe" style="font-size:10.5px">efetch db=pubmed — full abstract text (XML)</div>
+      <div class="arr">↓</div>
+      <div class="fn fe" style="font-size:10.5px">efetch db=pmc — Methods section from full-text (XML, OA only)</div>
+      <div class="note">Four separate API endpoints are called in sequence. PubMed requests are chunked in groups of 20, PMC in groups of 10, to respect NCBI rate limits. PMC Methods enrichment only succeeds for Open Access papers.</div>
+    </div>
+
+    <div class="ext">
+      <div class="mlabel">AI service</div>
+      <div class="mname">OpenRouter API</div>
+      <div class="mdesc">Unified gateway to large language models (Claude, Gemini). Used for two distinct purposes in this system.</div>
+      <div class="fn fe" style="font-size:10.5px">Rule generation — synthesise PubMed evidence + optional user reference into structured TE/TR benchmarks</div>
+      <div class="arr">↓</div>
+      <div class="fn fe" style="font-size:10.5px">Semantic mapping — translate vendor series names to canonical clinical labels</div>
+      <div class="note">Rule generation uses Claude (complex reasoning); semantic mapping uses Gemini Flash (fast, cheap single-question lookup). API key stored in environment variable, never committed to code.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 1 — RAG Pipeline</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">generate_rules_with_pubmed.py</div>
+    <div class="mdesc">The evidence-to-benchmark pipeline. Searches PubMed, enriches with PMC full-text where available, optionally merges an OEM vendor reference document and/or a user-provided site reference document, scores abstracts, and asks an LLM to produce structured rules.</div>
+
+    <div class="fn fp">_multi_strategy_search()</div>
+    <div class="note">Runs three complementary PubMed queries — clinical guidelines (via MeSH medical headings), technical parameters (papers mentioning TE/TR/flip angle), and protocol optimization (scan time, acceleration). Each returns up to 20 PMIDs. Results are merged and deduplicated into a single pool of up to ~60 papers. Date filter uses a dynamic range from 2018 to the current calendar year.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">get_pubmed_ids() → fetch_pubmed_summaries()</div>
+    <div class="note">Calls PubMed esearch for IDs, then esummary for lightweight metadata: journal name, publication date, PMCID (for full-text access), and whether the journal is on the gold-standard list (Radiology, AJNR, JMRI, European Radiology, RadioGraphics, Investigative Radiology, AJR). Gold-journal matching uses start-anchored word-boundary regex to prevent false positives (e.g. "Pediatric Radiology" does not match "Radiology").</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">fetch_pubmed_abstracts_by_pmid()</div>
+    <div class="note">Fetches full abstract text via PubMed efetch (XML format). Requests are split into chunks of 20 PMIDs to stay within NCBI rate limits for larger pools.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">_fetch_pmc_methods()</div>
+    <div class="note">For papers that have a PMCID (indicating PMC Open Access availability), fetches the full-text XML and extracts text from Methods/Materials sections. This text is appended to the abstract, enriching both the density scorer and LLM context with the parameter tables that rarely appear in abstracts alone. Chunked in groups of 10.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">_parameter_density()</div>
+    <div class="note">Counts regex matches for 14 MRI-specific patterns in each abstract (+ Methods when available): TE, TR, TI (with flexible delimiters), context-guarded ms and mm values (requiring MRI terms like TE/TR/slice/FOV nearby), flip angle, FOV, matrix size, slice thickness, b-value, voxel size, NEX, NSA, and bandwidth. A paper scoring 5 means it mentions 5 distinct technical terms — it likely contains a parameter table. A paper scoring 0 is purely clinical.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">select_top_five_pmids()</div>
+    <div class="note">Composite ranking with four tiers: (1) gold-standard journal first, (2) published 2018 or later, (3) highest parameter density, (4) most recent date. The top 5 papers that survive this ranking and have non-empty abstracts are selected.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">OEM document merge (via oem_registry.py)</div>
+    <div class="note">When the user selects a vendor (Philips, Siemens, GE, Canon) and an OEM reference document, the curated PDF is read, text-extracted, and prepended with weighting instructions: rank below gold-standard PubMed literature but above model training knowledge. OEM documents fill parameter gaps that abstracts often omit for vendor-specific implementations.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">_extract_text_from_pdf_bytes() + _prepare_supplementary_text()</div>
+    <div class="note">When the user attaches a site reference document (PDF or TXT) or pastes an excerpt, text is extracted (pypdf for PDFs) and, if longer than 24k chars, chunked into 5k-char windows that are ranked by parameter density + protocol keyword relevance. The highest-signal slices are selected up to the size cap. OEM and site documents are merged into a combined supplement with source-type labels and weighting instructions.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">_build_user_rag_content()</div>
+    <div class="note">Assembles the LLM prompt: each paper is labeled with its PMID, journal, gold-standard status, parameter density score, and source depth (abstract vs abstract+methods). If the user selected 1.5T, a hardware advisory note is prepended. The combined OEM + site supplement (if any) is appended with source-type labels and weighting instructions.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp">OpenRouter LLM call → validate_rules_schema()</div>
+    <div class="note">The LLM receives the system prompt (including the GRADE-aligned evidence rubric, which accounts for user-provided references) plus the assembled evidence. It returns a JSON object containing clinical_rationale (summary, evidence_strength, key_changes), study_rules, and series_protocols with TE/TR ranges and target durations. The JSON is validated against the expected schema before being written to disk.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fp" style="background:#2d7d5f">→ rules.json</div>
+    <div class="note">The single source of truth for all subsequent audits. Contains: acceptable TE/TR ranges per sequence, target acquisition durations, clinical rationale, and GRADE evidence strength. Overwritten each time a sync runs.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 2 — Non-PubMed Rule Generation</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">generate_rules.py</div>
+    <div class="mdesc">Direct LLM rule generation without PubMed. Used when the user wants to generate rules from a free-text protocol description rather than live literature.</div>
+
+    <div class="fn fs">generate_protocol_rules(prompt, scanner_tesla)</div>
+    <div class="note">Sends a protocol description (e.g. "Standard MS Brain MRI protocols") directly to the LLM with the same GRADE-aligned schema and evidence rubric. If scanner_tesla is 1.5, the 1.5T advisory is prepended. Useful for quick benchmarking without waiting for PubMed search.</div>
+    <div class="arr">↓</div>
+    <div class="fn fs" style="background:#2d7d5f">→ rules.json</div>
+    <div class="note">Same output format and validation as the PubMed path. The evidence_strength will typically be "Low" or "Moderate" since the LLM is relying on training knowledge rather than cited abstracts.</div>
+
+    <div style="margin-top:10px">
+      <div class="mlabel">Also provides (shared utilities)</div>
+      <div style="margin-top:4px">
+        <span class="tag">OPENROUTER_API_KEY</span>
+        <span class="tag">validate_rules_schema()</span>
+        <span class="tag">_extract_json_object()</span>
+        <span class="tag">write_rules_file()</span>
+      </div>
+      <div class="note" style="text-align:left;margin-top:6px">These constants and functions are imported by other modules (rule_engine.py, generate_rules_with_pubmed.py) to avoid duplication. This module also runs load_dotenv() on import, ensuring environment variables from the .env file are available system-wide.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 3 — DICOM Parser</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">dicom_parser.py</div>
+    <div class="mdesc">Reads a single DICOM file and extracts only the physics metadata needed for auditing. Deliberately ignores all patient-identifying information.</div>
+
+    <div class="fn fb">parse_dicom(path)</div>
+    <div class="note">Opens the .dcm file using pydicom with stop_before_pixels=True (never loads image data). Uses safe extraction helpers (_safe_str, _safe_float_ms, _safe_positive_int, _safe_positive_float, _pixel_spacing_mm) that return None instead of crashing on missing or malformed tags.</div>
+    <div class="arr">↓</div>
+
+    <div style="margin:8px 0">
+      <div class="mlabel" style="text-align:center">Extracted tags (physics only — no PHI)</div>
+      <div style="text-align:center;margin-top:6px">
+        <span class="tag">Study Description (0008,1030)</span>
+        <span class="tag">Series Description (0008,103E)</span>
+        <span class="tag">TE (0018,0081)</span>
+        <span class="tag">TR (0018,0080)</span>
+        <span class="tag">Flip Angle (0018,1314)</span>
+        <span class="tag">Inversion Time (0018,0082)</span>
+        <span class="tag">Acquisition Duration (0018,9073)</span>
+        <span class="tag">Slice Thickness (0018,0050)</span>
+        <span class="tag">Spacing Between Slices (0018,0088)</span>
+        <span class="tag">Pixel Spacing (0028,0030)</span>
+        <span class="tag">Matrix Rows (0028,0010)</span>
+        <span class="tag">Matrix Columns (0028,0011)</span>
+        <span class="tag">Number of Averages (0018,0083)</span>
+        <span class="tag">Magnetic Field Strength (0018,0087)</span>
+        <span class="tag">Manufacturer (0008,0070)</span>
+        <span class="tag">Manufacturer Model (0008,1090)</span>
+      </div>
+      <div class="note">These are technical sequence parameters that describe how the MRI scanner was configured — not who was scanned. Patient Name, DOB, and all other identifiers are never read. FOV is derived from Matrix × Pixel Spacing when both tags are present.</div>
+    </div>
+    <div class="arr">↓</div>
+
+    <div class="fn fb">_duration_heuristic_ms()</div>
+    <div class="note">When tag 0018,9073 (AcquisitionDuration) is absent — which is common in older DICOM files — a rough estimate is computed from TR × Number of Averages × echo-train scaling. Labeled as "heuristic estimate" in the UI so the user knows it's approximate.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fb" style="background:#2d7d5f">→ Returns dict with all physics fields (or None for missing tags)</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 4 — Rule Engine</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">rule_engine.py</div>
+    <div class="mdesc">The core audit logic. Compares a parsed DICOM against rules.json and produces the complete audit result: drift status, efficiency score, clinical grade, and hardware warnings.</div>
+
+    <div class="fn fo">load_rules() — reads rules.json from disk</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">evaluate(parsed_data, rules)</div>
+    <div class="note">The main entry point. Receives the DICOM physics dict from the parser and the rules dict. Orchestrates all checks below and returns a single result dict.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">Step 1 — Series matching with confidence rating</div>
+    <div class="note">First attempts an exact string match between the DICOM's SeriesDescription and the keys in rules.json (confidence: high). If no match is found, calls map_series_semantic() which sends the series name and all candidate keys to OpenRouter (Gemini Flash) and asks: "Which canonical label is the closest clinical match?" (confidence: medium). Each match also generates a plain-language benchmark rationale explaining why this comparison was chosen. This handles vendor naming inconsistencies like "T1 3D 0" → "3D T1 MPRAGE SAG".</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">Step 2 — Physics drift check: _check_timing()</div>
+    <div class="note">Compares actual TE and TR values from the DICOM against the min/max ranges in rules.json for the matched series. If either value falls outside the range, it's flagged as "PROTOCOL DRIFT DETECTED" with the expected range and actual value shown. If both are within range, the result is PASS.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">Step 3 — Efficiency scoring: _compute_efficiency_and_revenue()</div>
+    <div class="note">Compares the scan's actual acquisition duration against the target_duration_ms from rules.json. Score = 100 if at or faster than target; decays as the scan gets slower. If the scan is more than 20% slower than the benchmark, a "Revenue Opportunity" alert is generated with an illustrative throughput gain estimate.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">Step 4 — Hardware signal warning: _hardware_signal_warning()</div>
+    <div class="note">Only fires when physics PASS and scanner is 1.5T. Checks whether TE and/or TR sit in the bottom 25% of the acceptable range — indicating parameters that were likely designed for 3T's higher signal-to-noise and may produce grainy images on 1.5T hardware.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo">Step 5 — Clinical grade: _clinical_grade()</div>
+    <div class="note">Combines physics status and efficiency score into a single letter grade. A = physics pass + efficient (score ≥ 80). B = physics pass + no data or moderate efficiency (score ≥ 65). C = physics pass + slow (score ≥ 45). F = physics fail (any TE/TR drift detected).</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fo" style="background:#2d7d5f">→ Returns complete audit result dict</div>
+    <div class="note">A single dictionary containing: status (pass/fail/error), messages, mapped_series_key, mapping_method, match_confidence, benchmark_rationale, canonical_sequence_label, efficiency_score, efficiency_target_ms, efficiency_actual_ms, efficiency_ratio, revenue_opportunity, revenue_message, hardware_signal_warning, and clinical_grade. This is consumed directly by the Streamlit UI.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 5 — Streamlit Dashboard</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">app.py</div>
+    <div class="mdesc">The web interface. A single-page Streamlit application that connects all modules into an interactive audit workflow.</div>
+
+    <div class="fn fg">Sidebar — Guideline Management</div>
+    <div class="note">Protocol text input, scanner selector (1.5T / 3.0T / Not specified), OEM vendor document selector (manufacturer auto-detected from DICOM, with curated documents for Philips, Siemens, GE, Canon), optional site reference document upload (PDF or TXT) with a text-area alternative for pasting excerpts, and the "Sync with PubMed" button. When clicked, extracts text from OEM and site documents, merges them with source-type labels and weighting, then calls generate_rules_from_pubmed() which runs the full RAG pipeline. After sync, displays the list of selected PubMed sources with gold-star indicators, publication years, direct PMID links, plus OEM and user document rows if included.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Clinical Rationale & Evidence panel</div>
+    <div class="note">Reads clinical_rationale from rules.json and displays: an executive summary (2-4 sentences), a GRADE-aligned evidence strength badge (color-coded High/Moderate/Low with an explanation of what the rating means), a recent literature changes section, and a PubMed sources table showing Year, Journal, Impact Factor star, Parameter Density score, and PMID link for each paper used. When evidence is Low, an actionable tip is shown guiding the user to refine their query, attach a reference PDF, or verify against local protocols.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">File uploader — drag-and-drop .dcm</div>
+    <div class="note">Accepts a single DICOM file. Writes it to a temporary path, calls parse_dicom() to extract physics tags, then calls evaluate() to run the full audit. The temp file is deleted immediately in a finally block — even if an error occurs. A privacy notice is displayed below the uploader.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Sequence parameters display</div>
+    <div class="note">Five metric columns: Scan hardware (e.g. "3.0T"), Series description, TE (ms), TR (ms), and Acquisition duration (explicitly labeled as "from DICOM" or "heuristic estimate").</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Sequence identity row — Flip Angle, TI, Benchmark Protocol</div>
+    <div class="note">A second compact row showing flip angle (degrees), inversion time TI (ms), and the matched benchmark protocol label. These help the radiologist verify whether the sequence type was correctly identified — flip angle and TI are essential for distinguishing IR-prepared volumes from spoiled gradient-echo sequences.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Acquisition context (expandable) — spatial resolution details</div>
+    <div class="note">Expandable section showing: matrix rows/columns, number of averages, slice thickness (mm), slice spacing (mm), voxel size (row × col × slice, in mm), FOV (derived from matrix × pixel spacing, in mm), and pixel spacing. Missing tags display as "—". Spatial context lets the radiologist judge whether a protocol compromise happened in resolution rather than just timing.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Series mapping with confidence indicator</div>
+    <div class="note">Displays how the scanner's series label was mapped to a benchmark: exact match (high confidence, green indicator) or AI semantic mapping (medium confidence, yellow indicator). A plain-language benchmark rationale caption explains why the comparison was chosen. This transparency helps radiologists judge whether a drift finding is clinically meaningful or a mapping artefact.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Clinical audit strip</div>
+    <div class="note">Four metric columns: Clinical Grade (A/B/C/F with color emoji), Efficiency Score (0-100), Target time (from PubMed benchmark), and Observed duration (with % delta). Revenue opportunity and hardware signal warnings appear as alert banners when triggered.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fg">Protocol drift verdict</div>
+    <div class="note">A green PASS box or red FAIL box showing the final physics result. On failure, the specific TE/TR expected range and actual value are displayed so the radiologist knows exactly which parameter drifted and by how much.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Module 6 — OEM Document Registry</h2>
+  <div class="mod">
+    <div class="mlabel">Python module</div>
+    <div class="mname">oem_registry.py</div>
+    <div class="mdesc">Curated registry of MRI-relevant OEM reference documents for RAG enrichment. Maps vendor names to available protocol guides stored in the oem_docs/ directory.</div>
+
+    <div class="fn fe">OEM_DOCUMENT_REGISTRY — structured list of vendor documents</div>
+    <div class="note">Each entry contains: unique ID, display label, PDF filename, manufacturer (Philips, Siemens, GE, Canon), category (protocol_guide, technology, system_overview), body region, supported field strengths, whether it contains explicit parameters, and a description. Currently contains documents covering SmartExam workflows, AIR Recon DL, AiCE deep learning reconstruction, Compressed Sensing, and vendor-specific protocol tables.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fe">normalize_manufacturer() — DICOM Manufacturer tag alias mapping</div>
+    <div class="note">Maps common DICOM Manufacturer tag values (e.g. "PHILIPS MEDICAL SYSTEMS", "GE MEDICAL SYSTEMS", "SIEMENS HEALTHINEERS", "TOSHIBA") to canonical manufacturer names used by the registry. This allows auto-detection of the scanner vendor from the uploaded DICOM file.</div>
+    <div class="arr">↓</div>
+
+    <div class="fn fe">get_docs_for_manufacturer() / resolve_doc_path()</div>
+    <div class="note">Filters available documents by manufacturer and resolves the absolute path to each PDF in the oem_docs/ directory. Used by the Streamlit sidebar to populate the OEM document selector and by the RAG pipeline to read the selected document.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Data Flow Summary</h2>
+  <div class="mod" style="padding:12px 14px">
+    <div class="conn">
+      <span class="conn-arrow">①</span>
+      <span class="conn-label"><strong>User clicks "Sync"</strong> → app.py extracts text from optional OEM vendor document (via oem_registry.py) and/or site reference document → merges with source-type labels and weighting → calls generate_rules_with_pubmed.py → which calls PubMed API (3 searches) → fetches abstracts → fetches PMC Methods (where OA) → merges OEM + site supplement → scores density → ranks → calls OpenRouter LLM → writes <strong>rules.json</strong></span>
+    </div>
+    <div class="conn">
+      <span class="conn-arrow">②</span>
+      <span class="conn-label"><strong>User uploads .dcm</strong> → app.py calls dicom_parser.py → extracts physics tags (TE, TR, FA, TI, slice thickness, pixel spacing, voxel size, FOV, duration, field strength, manufacturer) → deletes temp file → auto-detects manufacturer for OEM selector → calls rule_engine.py with parsed data + rules.json</span>
+    </div>
+    <div class="conn">
+      <span class="conn-arrow">③</span>
+      <span class="conn-label"><strong>rule_engine.py</strong> → matches series (exact or via OpenRouter semantic mapping) with confidence rating → checks TE/TR drift → scores efficiency → checks hardware → assigns grade → generates benchmark rationale → returns result dict</span>
+    </div>
+    <div class="conn">
+      <span class="conn-arrow">④</span>
+      <span class="conn-label"><strong>app.py</strong> renders the result: rationale panel (with Low-evidence tip when applicable), sequence parameters + identity row (FA, TI, benchmark protocol), spatial resolution context (voxel, FOV, slice thickness), series mapping with confidence indicator, audit strip, and drift verdict</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
