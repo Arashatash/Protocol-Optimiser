@@ -476,18 +476,72 @@ def main() -> None:
     c4.metric("TR (ms)", tr_display)
     c5.metric(dur_label, dur_display)
 
+    flip_angle = parsed.get("flip_angle_deg")
+    ti_ms = parsed.get("inversion_time_ms")
+    canonical_label = result.get("canonical_sequence_label")
+
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Flip angle (°)", f"{float(flip_angle):g}" if flip_angle is not None else "—")
+    s2.metric("Inversion time TI (ms)", f"{float(ti_ms):g}" if ti_ms is not None else "—")
+    s3.metric("Benchmark protocol", canonical_label or "—")
+
     with st.expander("Acquisition context (non-PHI)", expanded=False):
         m1, m2, m3 = st.columns(3)
         m1.metric("Matrix rows", parsed.get("matrix_rows") if parsed.get("matrix_rows") else "—")
         m2.metric("Matrix columns", parsed.get("matrix_columns") if parsed.get("matrix_columns") else "—")
         m3.metric("Number of averages", parsed.get("number_of_averages") if parsed.get("number_of_averages") else "—")
+
+        slice_thick = parsed.get("slice_thickness_mm")
+        slice_spacing = parsed.get("spacing_between_slices_mm")
+        px_row = parsed.get("pixel_spacing_row_mm")
+        px_col = parsed.get("pixel_spacing_col_mm")
+        fov_row = parsed.get("fov_row_mm")
+        fov_col = parsed.get("fov_col_mm")
+
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Slice thickness (mm)", f"{float(slice_thick):g}" if slice_thick is not None else "—")
+        r2.metric("Slice spacing (mm)", f"{float(slice_spacing):g}" if slice_spacing is not None else "—")
+        voxel_str = "—"
+        if px_row is not None and px_col is not None and slice_thick is not None:
+            voxel_str = f"{px_row:.2f} × {px_col:.2f} × {slice_thick:g}"
+        r3.metric("Voxel size (mm)", voxel_str)
+
+        f1, f2 = st.columns(2)
+        fov_display = "—"
+        if fov_row is not None and fov_col is not None:
+            fov_display = f"{fov_row:.0f} × {fov_col:.0f}"
+        elif fov_row is not None:
+            fov_display = f"{fov_row:.0f} × —"
+        f1.metric("FOV (mm)", fov_display, help="Derived from matrix × pixel spacing when available.")
+        px_display = "—"
+        if px_row is not None and px_col is not None:
+            px_display = f"{px_row:.2f} × {px_col:.2f}"
+        f2.metric("Pixel spacing (mm)", px_display)
+
         st.caption(
             "Heuristic duration (when tag 0018,9073 is absent) uses TR × NSA × echo-train scaling — "
             "illustrative only."
         )
 
-    if result.get("mapped_series_key") and result.get("mapping_method") == "semantic":
-        st.info(f"**Series mapping:** {series!r} → **{result['mapped_series_key']}** (semantic match).")
+    _confidence = result.get("match_confidence", "none")
+    _rationale = result.get("benchmark_rationale")
+    _confidence_icons = {"high": "🟢", "medium": "🟡", "none": "⚪"}
+    _conf_icon = _confidence_icons.get(_confidence, "⚪")
+
+    if result.get("mapped_series_key"):
+        if result.get("mapping_method") == "semantic":
+            st.info(
+                f"**Series mapping:** '{series}' \u2192 **{result['mapped_series_key']}** "
+                f"(semantic match \u00b7 confidence: {_conf_icon} {_confidence})"
+            )
+        else:
+            st.info(
+                f"**Series mapping:** '{series}' matched benchmark "
+                f"**{result['mapped_series_key']}** "
+                f"(exact \u00b7 confidence: {_conf_icon} {_confidence})"
+            )
+        if _rationale:
+            st.caption(_rationale)
 
     if st.session_state.rules_version > 0:
         st.caption(f"Rules snapshot **v{st.session_state.rules_version}** — `rules.json` on disk.")

@@ -266,6 +266,9 @@ def evaluate(parsed_data: dict[str, Any], rules: dict[str, Any]) -> dict[str, An
     base_extra: dict[str, Any] = {
         "mapped_series_key": None,
         "mapping_method": "none",
+        "match_confidence": "none",
+        "benchmark_rationale": None,
+        "canonical_sequence_label": None,
         "efficiency_score": None,
         "efficiency_target_ms": None,
         "efficiency_actual_ms": None,
@@ -365,11 +368,28 @@ def evaluate(parsed_data: dict[str, Any], rules: dict[str, Any]) -> dict[str, An
     if physics_status == "pass" and revenue_opportunity and grade == "A":
         grade = "B"
 
+    confidence = "high" if mapping_method == "exact" else (
+        "medium" if mapping_method == "semantic" else "none"
+    )
+
+    if mapping_method == "exact":
+        rationale = f"Scanner label matched benchmark protocol \u2018{matched_key}\u2019 exactly."
+    elif mapping_method == "semantic":
+        rationale = (
+            f"Scanner label \u2018{series_key}\u2019 was mapped to benchmark "
+            f"\u2018{matched_key}\u2019 by AI semantic matching (medium confidence)."
+        )
+    else:
+        rationale = None
+
     result: dict[str, Any] = {
         "status": "fail" if not all_ok else "pass",
         "messages": messages,
         "mapped_series_key": matched_key,
         "mapping_method": mapping_method,
+        "match_confidence": confidence,
+        "benchmark_rationale": rationale,
+        "canonical_sequence_label": matched_key,
         "efficiency_score": eff["efficiency_score"],
         "efficiency_target_ms": eff["efficiency_target_ms"],
         "efficiency_actual_ms": eff["efficiency_actual_ms"],

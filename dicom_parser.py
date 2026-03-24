@@ -90,6 +90,27 @@ def _safe_positive_float(ds: Dataset, keyword: str, tag: tuple[int, int]) -> flo
         return None
 
 
+def _pixel_spacing_mm(ds: Dataset) -> tuple[float | None, float | None]:
+    """Return (row_spacing_mm, col_spacing_mm) from PixelSpacing (0028,0030)."""
+    elem = ds.get("PixelSpacing") or ds.get((0x0028, 0x0030))
+    if elem is None:
+        return None, None
+    raw = getattr(elem, "value", elem)
+    if raw is None:
+        return None, None
+    if not isinstance(raw, (list, tuple, pydicom.multival.MultiValue)):
+        return None, None
+    try:
+        row_sp = float(raw[0]) if len(raw) > 0 else None
+        col_sp = float(raw[1]) if len(raw) > 1 else None
+    except (TypeError, ValueError, IndexError):
+        return None, None
+    return (
+        row_sp if row_sp is not None and row_sp > 0 else None,
+        col_sp if col_sp is not None and col_sp > 0 else None,
+    )
+
+
 def _acquisition_duration_ms(ds: Dataset) -> float | None:
     """
     (0018,9073) AcquisitionDuration — DICOM gives total duration in seconds (VR FD).
@@ -144,6 +165,14 @@ def parse_dicom(path: str | Path) -> dict[str, Any]:
         "matrix_rows": None,
         "matrix_columns": None,
         "number_of_averages": None,
+        "flip_angle_deg": None,
+        "inversion_time_ms": None,
+        "slice_thickness_mm": None,
+        "spacing_between_slices_mm": None,
+        "pixel_spacing_row_mm": None,
+        "pixel_spacing_col_mm": None,
+        "fov_row_mm": None,
+        "fov_col_mm": None,
     }
 
     try:
@@ -175,6 +204,15 @@ def parse_dicom(path: str | Path) -> dict[str, Any]:
     cols = _safe_positive_int(ds, "Columns", (0x0028, 0x0011))
     nsa = _safe_positive_float(ds, "NumberOfAverages", (0x0018, 0x0083))
 
+    flip_angle = _safe_positive_float(ds, "FlipAngle", (0x0018, 0x1314))
+    ti_ms = _safe_float_ms(ds, "InversionTime", (0x0018, 0x0082))
+    slice_thick = _safe_positive_float(ds, "SliceThickness", (0x0018, 0x0050))
+    slice_spacing = _safe_positive_float(ds, "SpacingBetweenSlices", (0x0018, 0x0088))
+    px_row, px_col = _pixel_spacing_mm(ds)
+
+    fov_row = round(rows * px_row, 1) if rows and px_row else None
+    fov_col = round(cols * px_col, 1) if cols and px_col else None
+
     out = {
         "study_description": _safe_str(ds, "StudyDescription", (0x0008, 0x1030)),
         "series_description": _safe_str(ds, "SeriesDescription", (0x0008, 0x103E)),
@@ -188,5 +226,13 @@ def parse_dicom(path: str | Path) -> dict[str, Any]:
         "matrix_rows": rows,
         "matrix_columns": cols,
         "number_of_averages": nsa,
+        "flip_angle_deg": flip_angle,
+        "inversion_time_ms": ti_ms,
+        "slice_thickness_mm": slice_thick,
+        "spacing_between_slices_mm": slice_spacing,
+        "pixel_spacing_row_mm": px_row,
+        "pixel_spacing_col_mm": px_col,
+        "fov_row_mm": fov_row,
+        "fov_col_mm": fov_col,
     }
     return out
