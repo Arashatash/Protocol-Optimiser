@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DICOM Audit Flowchart</title>
+<style>
+  :root {
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #5f5e5a;
+    --color-text-tertiary: #888780;
+    --color-border-primary: rgba(0,0,0,0.4);
+    --font-sans: system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-text-primary: #e8e6dc;
+      --color-text-secondary: #b4b2a9;
+      --color-text-tertiary: #888780;
+      --color-border-primary: rgba(255,255,255,0.4);
+    }
+    body { background: #1c1c1a; }
+    .s1{background:#04342C !important;border-color:#0F6E56 !important}
+    .s2{background:#26215C !important;border-color:#534AB7 !important}
+    .s3{background:#042C53 !important;border-color:#185FA5 !important}
+    .s4{background:#412402 !important;border-color:#854F0B !important}
+    .s5{background:#173404 !important;border-color:#3B6D11 !important}
+    .note { color: var(--color-text-secondary) !important; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; font-family: var(--font-sans); background: #f9f8f4; }
+  .wrap { max-width: 620px; margin: 0 auto; font-size: 12px; line-height: 1.4; color: var(--color-text-primary); }
+  h1 { font-size: 16px; font-weight: 500; margin: 0 0 20px; color: var(--color-text-primary); }
+  .sect { border-radius: 10px; padding: 14px; margin-bottom: 6px; border: 1px solid; }
+  .s1 { background: #E1F5EE; border-color: #5DCAA5; }
+  .s2 { background: #EEEDFE; border-color: #AFA9EC; }
+  .s3 { background: #E6F1FB; border-color: #85B7EB; }
+  .s4 { background: #FAEEDA; border-color: #EF9F27; }
+  .s5 { background: #EAF3DE; border-color: #97C459; }
+  .slabel { font-size: 10px; font-weight: 500; letter-spacing: .06em; opacity: .6; text-transform: uppercase; margin-bottom: 10px; }
+  .node { border-radius: 6px; padding: 7px 12px; margin: 0 auto 3px; display: block; font-size: 12px; line-height: 1.4; text-align: center; max-width: 100%; color: #fff; }
+  .nt { background: #0F6E56; }
+  .np { background: #534AB7; }
+  .nb { background: #185FA5; }
+  .na { background: #854F0B; }
+  .ng { background: #3B6D11; }
+  .npass { background: #3B6D11; }
+  .nfail { background: #A32D2D; }
+  .nrev { background: #BA7517; }
+  .arr { text-align: center; color: var(--color-text-tertiary); line-height: 1.9; font-size: 13px; }
+  .sarr { text-align: center; color: var(--color-text-secondary); font-size: 18px; line-height: 2; margin-bottom: 4px; }
+  .branch { display: flex; gap: 8px; justify-content: center; margin: 4px 0; }
+  .bcol { flex: 1; text-align: center; }
+  .blabel { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 3px; font-weight: 500; }
+  .diamond-svg text { font-family: var(--font-sans); }
+  .note { font-size: 10.5px; line-height: 1.45; color: #5f5e5a; text-align: center; margin: 2px auto 8px; max-width: 95%; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DICOM Protocol Audit — System Flowchart</h1>
+
+  <div class="sect s1">
+    <div class="slabel">Step 1 — Sync with PubMed evidence</div>
+    <div class="node nt">Radiologist opens sidebar</div>
+    <div class="arr">↓</div>
+    <div class="node nt">Selects study type (e.g. Multiple Sclerosis, Stroke)</div>
+    <div class="arr">↓</div>
+    <div class="node nt">Optionally selects scanner (1.5T or 3.0T)</div>
+    <div class="note">If 1.5T is selected, the AI is instructed to optimise TE/TR ranges for lower signal-to-noise hardware.</div>
+    <div class="arr">↓</div>
+    <div class="node nt">Optionally selects an OEM vendor reference document (Philips, Siemens, GE, Canon)</div>
+    <div class="note">Curated OEM protocol guides contain manufacturer-recommended default parameters. These are ranked below gold-standard PubMed literature but above model training knowledge, filling gaps when abstracts lack vendor-specific detail.</div>
+    <div class="arr">↓</div>
+    <div class="node nt">Optionally attaches a site reference document (PDF or TXT) or pastes an excerpt</div>
+    <div class="note">Society guidelines, site protocols, or any approved reference with explicit TE/TR tables. Text is extracted, parameter-density-ranked, and merged into the synthesis alongside PubMed and OEM evidence — this is the most effective way to boost evidence strength.</div>
+    <div class="arr">↓</div>
+    <div class="node nt">Clicks "Sync with PubMed"</div>
+  </div>
+
+  <div class="sarr">↓</div>
+
+  <div class="sect s2">
+    <div class="slabel">Behind the scenes — Systematic evidence search</div>
+    <div class="node np">Three-strategy PubMed search — guidelines, technical parameters, protocol optimization</div>
+    <div class="note">PubMed is the US National Library of Medicine's database of 36M+ biomedical papers. Three complementary searches (clinical guidelines via MeSH medical headings, technical parameter papers, protocol optimization studies) ensure we don't miss relevant evidence — the same approach used in formal systematic reviews.</div>
+    <div class="arr">↓</div>
+    <div class="node np">Up to 60 papers pooled and deduplicated</div>
+    <div class="note">Each of the three search strategies returns up to 20 results. Duplicates across the three searches are removed, leaving a single evidence pool filtered to 2018-onward literature.</div>
+    <div class="arr">↓</div>
+    <div class="node np">Abstracts fetched for entire pool</div>
+    <div class="arr">↓</div>
+    <div class="node np">PMC full-text Methods sections fetched where Open Access allows</div>
+    <div class="note">PubMed abstracts rarely contain parameter tables — those live in the Methods section of full papers. For papers with a PMC Open Access ID, the system fetches and appends the Methods text, enriching both the density scorer and the LLM context.</div>
+    <div class="arr">↓</div>
+    <div class="node np">Parameter-density scorer — counts TE, TR, TI, ms, mm, bandwidth, NEX terms per abstract</div>
+    <div class="note">Most PubMed abstracts about MS or Stroke are clinical outcome papers that don't contain actual MRI numbers. This scorer uses pattern matching to count explicit technical terms (e.g. "TE = 80 ms", "slice thickness 3 mm") in each abstract, so papers with real parameter data are prioritised over those that only discuss clinical findings.</div>
+    <div class="arr">↓</div>
+    <div class="node np">Composite ranking: Gold journal > Recency > Param density > Date</div>
+    <div class="note">Gold journals are the top 7 radiology publications (Radiology, AJNR, JMRI, European Radiology, RadioGraphics, Investigative Radiology, AJR) — their data is given the highest trust. Within each tier, newer papers with more technical content rank higher.</div>
+    <div class="arr">↓</div>
+    <div class="node np">Top 5 abstracts + optional OEM vendor guide + optional site reference sent to LLM with GRADE rubric</div>
+    <div class="note">GRADE is the international standard for rating evidence certainty, used by WHO, Cochrane, and clinical guideline bodies worldwide. The LLM is instructed to rate its own output as High, Moderate, or Low based on how many of the provided abstracts contain explicit MRI parameter numbers from gold-standard journals. OEM vendor protocol guides provide manufacturer-recommended defaults (ranked below PubMed but above model training knowledge). A parameter-rich user reference document can independently justify High or Moderate evidence strength.</div>
+    <div class="arr">↓</div>
+    <div class="node np">LLM generates rules.json — TE/TR ranges, target durations, clinical rationale, evidence strength</div>
+    <div class="note">The output is a structured benchmark file containing: acceptable TE/TR ranges per sequence (e.g. FLAIR TE: 80–140 ms), target acquisition durations, a clinical rationale summary, and a GRADE-aligned evidence strength rating. This file is what every uploaded DICOM is compared against.</div>
+  </div>
+
+  <div class="sarr">↓</div>
+
+  <div class="sect s3">
+    <div class="slabel">Step 2 — Upload a DICOM file</div>
+    <div class="node nb">Drag and drop a .dcm file</div>
+    <div class="arr">↓</div>
+    <div class="node nb">File written to temporary local path</div>
+    <div class="arr">↓</div>
+    <div class="node nb">DICOM parser extracts physics-only tags: TE, TR, Flip Angle, TI, Duration, Matrix, Slice Thickness, Pixel Spacing, Field Strength</div>
+    <div class="note">DICOM is the standard file format for medical images. Each file contains hundreds of metadata tags. The parser reads only the technical sequence tags — timing (TE, TR, TI), contrast (flip angle), spatial resolution (slice thickness, pixel spacing, voxel size, FOV), and hardware context. It deliberately ignores patient name, DOB, and all other Protected Health Information (PHI).</div>
+    <div class="arr">↓</div>
+    <div class="node nb">Temp file deleted immediately</div>
+    <div class="note">The uploaded file is removed from disk as soon as the physics tags are extracted. No patient data is retained.</div>
+  </div>
+
+  <div class="sarr">↓</div>
+
+  <div class="sect s4">
+    <div class="slabel">Step 3 — Review the audit</div>
+    <div class="node na">Series matching — exact match or AI semantic mapping — with confidence rating</div>
+    <div class="note">Scanner vendors use inconsistent naming (e.g. "T1 3D 0" vs "3D T1 MPRAGE SAG"). If the series name doesn't exactly match a rule, the system asks an AI model to find the closest clinical equivalent — like a translator between vendor dialects and standard terminology. Each match is assigned a confidence level (high for exact, medium for semantic) and a benchmark rationale explaining why this comparison was chosen.</div>
+    <div class="arr">↓</div>
+
+    <div style="text-align:center;margin:4px 0">
+      <svg class="diamond-svg" width="200" height="64" viewBox="0 0 200 64">
+        <polygon points="100,3 197,32 100,61 3,32" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="1.5"/>
+        <text x="100" y="27" text-anchor="middle" font-size="10" font-weight="500" fill="#1a1a18">TE/TR within</text>
+        <text x="100" y="41" text-anchor="middle" font-size="10" font-weight="500" fill="#1a1a18">rules.json ranges?</text>
+      </svg>
+    </div>
+
+    <div class="branch">
+      <div class="bcol">
+        <div class="blabel">Yes →</div>
+        <div class="node npass">PASS — physics OK</div>
+      </div>
+      <div class="bcol">
+        <div class="blabel">← No</div>
+        <div class="node nfail">FAIL — protocol drift detected with expected vs actual values</div>
+      </div>
+    </div>
+    <div class="note">Protocol drift is the gradual divergence of scanner parameters from agreed standards, usually caused by manual tweaks over weeks or months. Even small TE/TR changes can silently degrade image contrast.</div>
+    <div class="arr">↓</div>
+
+    <div class="node na">Efficiency score — compare AcquisitionDuration vs target_duration_ms from PubMed benchmark</div>
+    <div class="note">The scan's actual acquisition time (extracted from the DICOM file) is compared to the target duration derived from current PubMed evidence. A score of 100 means the scan matches or beats the benchmark.</div>
+    <div class="arr">↓</div>
+
+    <div style="text-align:center;margin:4px 0">
+      <svg class="diamond-svg" width="200" height="64" viewBox="0 0 200 64">
+        <polygon points="100,3 197,32 100,61 3,32" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="1.5"/>
+        <text x="100" y="27" text-anchor="middle" font-size="10" font-weight="500" fill="#1a1a18">Scan &gt;20% slower</text>
+        <text x="100" y="41" text-anchor="middle" font-size="10" font-weight="500" fill="#1a1a18">than benchmark?</text>
+      </svg>
+    </div>
+
+    <div class="branch">
+      <div class="bcol">
+        <div class="blabel">Yes →</div>
+        <div class="node nrev">Revenue opportunity alert displayed</div>
+      </div>
+      <div class="bcol">
+        <div class="blabel">← No</div>
+        <div class="node npass">Efficiency within acceptable range</div>
+      </div>
+    </div>
+    <div class="note">A scan running significantly slower than modern benchmarks represents lost scanner capacity. Modernising sequence physics could add on the order of one additional billable patient slot per day when scans are materially slower than benchmark.</div>
+    <div class="arr">↓</div>
+
+    <div class="node na">Clinical grade assigned: A / B / C / F based on physics + efficiency combined</div>
+    <div class="note">A = physics pass + efficient. B = physics pass + no efficiency data or minor delay. C = physics pass + significantly slow. F = physics fail (TE/TR outside acceptable range).</div>
+    <div class="arr">↓</div>
+    <div class="node na">1.5T hardware warning if aggressive 3T params detected on 1.5T scanner</div>
+    <div class="note">Running 3T-optimised parameters on a 1.5T scanner reduces signal-to-noise ratio, potentially producing grainy images. The system detects when TE/TR sit in the aggressive low end of the acceptable range on lower-field hardware.</div>
+  </div>
+
+  <div class="sarr">↓</div>
+
+  <div class="sect s5">
+    <div class="slabel">What the radiologist sees</div>
+    <div class="node ng">Clinical rationale panel — executive summary, GRADE-aligned evidence badge, recent literature changes</div>
+    <div class="note">This panel shows the AI's reasoning: what the evidence says, how strong it is (High/Moderate/Low), and what has changed in recent literature versus older protocols — so the radiologist can judge whether to trust the recommendation.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">PubMed sources table — year, journal, gold star, param density, PMID link</div>
+    <div class="note">Full provenance for every paper used: publication year, journal name, whether it's a gold-standard source, how many technical terms its abstract contains, and a direct link to the original paper on PubMed. If a user-provided reference document was included, it appears as a separate row with its own parameter density score.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Low-evidence tip (when strength is Low) — refine query, attach reference PDF, verify locally</div>
+    <div class="note">When PubMed abstracts lack explicit parameters and no reference document was attached, an actionable tip guides the radiologist on how to improve evidence quality for the next sync.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Sequence parameters — hardware, series, TE, TR, acquisition duration</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Sequence identity row — flip angle, inversion time (TI), benchmark protocol label</div>
+    <div class="note">These three fields help the radiologist verify whether the sequence type is correctly identified. Flip angle and TI are essential for distinguishing IR-prepared volumes (e.g. MPRAGE) from spoiled gradient-echo sequences that may share similar TE/TR values.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Acquisition context — matrix, averages, slice thickness, spacing, voxel size, FOV, pixel spacing</div>
+    <div class="note">Spatial resolution details let the radiologist judge whether a protocol compromise happened in the spatial domain (thicker slices, larger voxels) rather than just the timing domain. FOV is derived from matrix × pixel spacing when the DICOM tags are present.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Series mapping with confidence — match method, confidence indicator, benchmark rationale</div>
+    <div class="note">Displays how the scanner's series label was mapped to a benchmark protocol: exact match (high confidence) or AI semantic mapping (medium confidence), along with a plain-language rationale. This transparency helps radiologists judge whether a "drift" finding reflects a real problem or a mapping artefact.</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Audit strip — grade, efficiency score, target vs observed time, revenue message</div>
+    <div class="arr">↓</div>
+    <div class="node ng">Protocol drift verdict — PASS or FAIL with specific TE/TR details</div>
+  </div>
+</div>
+</body>
+</html>
